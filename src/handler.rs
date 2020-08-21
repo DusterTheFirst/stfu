@@ -1,4 +1,5 @@
 use crate::args::{Args, ArgsKey, Command};
+use notify_rust::Notification;
 use serenity::{
     async_trait,
     client::{Context, EventHandler},
@@ -12,7 +13,7 @@ impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, _: Ready) {
         let data = ctx.data.read().await;
 
-        let Args { command, channel } = data.get::<ArgsKey>().unwrap();
+        let Args { command, channel, .. } = data.get::<ArgsKey>().unwrap();
 
         let channel = ChannelId::from(*channel)
             .to_channel(&ctx)
@@ -38,6 +39,15 @@ impl EventHandler for Handler {
                     };
                 }
             }
+
+            Notification::new()
+                .summary("Success")
+                .body(match mute {
+                    true => "Muted everyone",
+                    false => "Unmuted everyone",
+                })
+                .show()
+                .unwrap();
         } else {
             panic!("The channel provided was not a guild channel, check the channel id");
         }

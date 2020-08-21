@@ -14,6 +14,9 @@ pub struct Args {
     #[argh(option, default = "717435160378867772")]
     /// the channel id to mute
     pub channel: u64,
+    #[argh(option)]
+    /// the token to the bot
+    pub token: String,
 }
 
 #[derive(FromArgs, PartialEq, Debug)]

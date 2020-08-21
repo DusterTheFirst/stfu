@@ -1,23 +1,30 @@
-use anyhow::{Context as _, Result};
 use args::{Args, ArgsKey};
 use handler::Handler;
+use notify_rust::Notification;
+use panic::PanicInfo;
 use serenity::client::Client;
-use std::env;
+use std::panic;
 
 mod args;
 mod handler;
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() {
+    panic::set_hook(Box::new(|info: &PanicInfo| {
+        Notification::new()
+            .summary("PANIC")
+            .body(&format!("{}", info))
+            .show()
+            .unwrap();
+        eprint!("{}", info);
+    }));
+
     let args: Args = argh::from_env();
 
-    let token = env::var("DISCORD_TOKEN")
-        .context("You must provide a DISCORD_TOKEN environment variable")?;
-
-    let mut client = Client::new(token)
+    let mut client = Client::new(&args.token)
         .event_handler(Handler)
         .await
-        .context("Failed to create client")?;
+        .expect("Failed to create client");
 
     {
         let mut data = client.data.write().await;
@@ -25,7 +32,5 @@ async fn main() -> Result<()> {
         data.insert::<ArgsKey>(args);
     }
 
-    client.start().await.context("Client failed to run")?;
-
-    Ok(())
+    client.start().await.expect("Client failed to run");
 }
