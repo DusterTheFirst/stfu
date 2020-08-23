@@ -12,7 +12,7 @@ use serenity::{
     },
     prelude::{Mutex, TypeMapKey},
 };
-use std::{env, fs::File, panic, sync::Arc, time::Duration};
+use std::{env, panic, sync::Arc, time::Duration};
 use tokio::net::TcpListener;
 use tokio::{prelude::*, time::delay_for};
 
@@ -122,10 +122,7 @@ fn main() {
         eprint!("{}", info);
     }));
 
-    let stdout = File::create("info.log").unwrap();
-    let stderr = File::create("err.log").unwrap();
-
-    let daemon = Daemon::new().stdout(stdout).stderr(stderr).start();
+    let daemon = Daemon::new().start();
 
     match daemon {
         Ok(_) => println!("Daemonized with success"),
