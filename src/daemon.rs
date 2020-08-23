@@ -1,3 +1,4 @@
+use daemonize_me::Daemon;
 use messages::{Acknowledgement, Action};
 use notify_rust::Notification;
 use panic::PanicInfo;
@@ -11,7 +12,7 @@ use serenity::{
     },
     prelude::{Mutex, TypeMapKey},
 };
-use std::{env, panic, sync::Arc, time::Duration};
+use std::{env, fs::File, panic, sync::Arc, time::Duration};
 use tokio::net::TcpListener;
 use tokio::{prelude::*, time::delay_for};
 
@@ -39,7 +40,7 @@ impl EventHandler for Handler {
         loop {
             let (mut socket, _) = tokio::select! {
                 connection = listener.accept() => { connection.unwrap() }
-                _ = delay_for(Duration::from_secs(/* FIXME: 10 * */ 60)) => {
+                _ = delay_for(Duration::from_secs(10 * 60)) => {
                     println!("No calls for 10 minutes, closing");
 
                     shard_manager.lock().await.shutdown_all().await;
@@ -111,8 +112,7 @@ impl TypeMapKey for ShardManagerKey {
     type Value = Arc<Mutex<ShardManager>>;
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
     panic::set_hook(Box::new(|info: &PanicInfo| {
         Notification::new()
             .summary("PANIC")
@@ -122,6 +122,23 @@ async fn main() {
         eprint!("{}", info);
     }));
 
+    let stdout = File::create("info.log").unwrap();
+    let stderr = File::create("err.log").unwrap();
+
+    let daemon = Daemon::new().stdout(stdout).stderr(stderr).start();
+
+    match daemon {
+        Ok(_) => println!("Daemonized with success"),
+        Err(e) => panic!("Error, {}", e),
+    }
+
+    let mut rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        async_main().await;
+    });
+}
+
+async fn async_main() {
     let args = env::args().collect::<Vec<_>>();
 
     let token = args
@@ -141,5 +158,6 @@ async fn main() {
             .insert::<ShardManagerKey>(client.shard_manager.clone());
     }
 
+    println!("Starting client");
     client.start().await.expect("Client failed to run");
 }
