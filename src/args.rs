@@ -1,10 +1,4 @@
 use argh::FromArgs;
-use serenity::prelude::TypeMapKey;
-
-pub struct ArgsKey;
-impl TypeMapKey for ArgsKey {
-    type Value = Args;
-}
 
 #[derive(FromArgs, PartialEq, Debug)]
 /// Program to make people shut the fuck up
