@@ -1,6 +1,4 @@
-use juniper::FieldResult;
-use juniper::RootNode;
-use juniper::{GraphQLEnum, GraphQLInputObject, GraphQLObject};
+use juniper::{FieldResult, GraphQLEnum, GraphQLInputObject, GraphQLObject, RootNode};
 use serenity::model::id::{ChannelId, GuildId};
 
 /// A discord voice channel
@@ -34,14 +32,14 @@ impl Guild {
     fn id(&self) -> String {
         self.id.to_string()
     }
-    fn voice_channel(id: String) -> FieldResult<VoiceChannel> {
+    fn voice_channel(id: String) -> FieldResult<Option<VoiceChannel>> {
         let id = ChannelId::from(id.parse::<u64>()?);
 
-        Ok(VoiceChannel {
+        Ok(Some(VoiceChannel {
             id,
             members: vec![],
             name: "test".into(),
-        })
+        }))
     }
 }
 
@@ -49,10 +47,11 @@ pub struct QueryRoot;
 
 #[juniper::object]
 impl QueryRoot {
-    fn guild(id: String) -> FieldResult<Guild> {
+    fn guild(id: String) -> FieldResult<Option<Guild>> {
         let id = GuildId::from(id.parse::<u64>()?);
 
-        Ok(Guild { id })
+        // Ok(Some(Guild { id }))
+        Ok(None)
     }
 }
 

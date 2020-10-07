@@ -8,16 +8,13 @@ edition = "2018"
 
 [dependencies]
 async-std = { version = "1.6.5", features = ["tokio02", "attributes"] }
-serenity = { version = "0.9.0-rc.2", default-features = false, features = [
-    "builder",
-    "cache",
-    "client",
-    "gateway",
-    "http",
-    "model",
-    "rustls_backend",
-    "utils",
-] }
+twilight-cache-inmemory = "0.1.1"
+twilight-embed-builder = "0.1.0"
+twilight-gateway = "0.1.2"
+twilight-http = "0.1.6"
+twilight-mention = "0.1.1"
+twilight-model = "0.1.3"
+twilight-standby = "0.1.1"
 juniper = "0.14.2"
 juniper_rocket = "0.5.2"
 rocket = "0.4.5"
