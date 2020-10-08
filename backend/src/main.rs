@@ -1,44 +1,45 @@
 #![deny(unused_must_use)]
 #![feature(decl_macro, proc_macro_hygiene)]
 
-use async_std::task;
+use anyhow::Context;
+use async_std::{stream::StreamExt, task};
 use content::Html;
-use graphql::{create_schema, Schema};
+use graphql::{create_schema, Discord, Schema};
 use juniper_rocket::{graphiql_source, GraphQLRequest, GraphQLResponse};
 use log::{debug, error, info, trace, warn};
-use rocket::{response::content, routes, State};
-use serenity::{
-    async_trait, client::Context, client::EventHandler, model::channel::Channel,
-    model::channel::ChannelType, model::id::ChannelId, model::prelude::Ready, Client,
-};
-use std::{env, net::Ipv4Addr, net::SocketAddrV4, sync::Arc};
+use rocket::{config::Environment, response::content, routes, Config, State};
+use std::env;
+use twilight_cache_inmemory::{EventType, InMemoryCacheBuilder};
+use twilight_gateway::shard::ShardBuilder;
+use twilight_http::Client as HttpClient;
+use twilight_model::{gateway::Intents, id::ChannelId};
 
+mod consts;
 mod graphql;
 
 const CHANNEL_ID: ChannelId = ChannelId(717435160378867772);
 
-struct Handler;
+// struct Handler;
 
-#[async_trait]
-impl EventHandler for Handler {
-    async fn ready(&self, ctx: Context, _data_about_bot: Ready) {
-        task::spawn();
-        //     let channel = CHANNEL_ID
-        //         .to_channel(ctx)
-        //         .await
-        //         .expect("The channel stored in CHANNEL_ID does not exist");
+// #[async_trait]
+// impl EventHandler for Handler {
+//     async fn ready(&self, ctx: Context, _data_about_bot: Ready) {
+//     let channel = CHANNEL_ID
+//         .to_channel(ctx)
+//         .await
+//         .expect("The channel stored in CHANNEL_ID does not exist");
 
-        //     if let Channel::Guild(channel) = channel {
-        //         if channel.kind == ChannelType::Voice {
-        //             println!("{:#?}", channel.bitrate);
-        //         } else {
-        //             panic!("The channel provided was not a guild voice channel, check the channel id");
-        //         }
-        //     } else {
-        //         panic!("The channel provided was not a guild channel, check the channel id");
-        //     }
-    }
-}
+//     if let Channel::Guild(channel) = channel {
+//         if channel.kind == ChannelType::Voice {
+//             println!("{:#?}", channel.bitrate);
+//         } else {
+//             panic!("The channel provided was not a guild voice channel, check the channel id");
+//         }
+//     } else {
+//         panic!("The channel provided was not a guild channel, check the channel id");
+//     }
+//     }
+// }
 
 #[rocket::get("/")]
 fn graphiql() -> Html<String> {
@@ -47,35 +48,39 @@ fn graphiql() -> Html<String> {
 
 #[rocket::get("/graphql?<request>")]
 fn get_graphql_handler(
-    // context: State<Database>,
+    context: State<Discord>,
     request: GraphQLRequest,
     schema: State<Schema>,
 ) -> GraphQLResponse {
-    request.execute(&schema, &())
+    request.execute(&schema, context.inner())
 }
 
 #[rocket::post("/graphql", data = "<request>")]
 fn post_graphql_handler(
-    // context: State<Database>,
+    context: State<Discord>,
     request: GraphQLRequest,
     schema: State<Schema>,
 ) -> GraphQLResponse {
-    request.execute(&schema, &())
+    request.execute(&schema, context.inner())
 }
 
 #[async_std::main]
-async fn main() {
-    env::set_var("RUST_LOG", "_=info");
+async fn main() -> anyhow::Result<()> {
+    env::set_var(
+        "RUST_LOG",
+        "warn,_=info,launch=info,launch_=info,rocket=info",
+    );
     pretty_env_logger::init();
 
-    let token =
-        env::var("DISCORD_TOKEN").expect("You must provide a DISCORD_TOKEN environment variable");
+    let token = env::var("DISCORD_TOKEN")
+        .context("You must provide a DISCORD_TOKEN environment variable")?;
 
-    let http = Client::new(&token);
+    let http = HttpClient::new(&token);
 
-    let mut shard = ShardBuilder::new(token).http_client(http).intents(Some(
-        GatewayIntents::GUILD_VOICE_STATES | GatewayIntents::GUILDS,
-    ));
+    let mut shard = ShardBuilder::new(token)
+        .http_client(http)
+        .intents(Intents::GUILD_VOICE_STATES | Intents::GUILDS)
+        .build();
     shard.start().await?;
 
     let cache = InMemoryCacheBuilder::new()
@@ -87,29 +92,38 @@ async fn main() {
     // Startup an event loop for each event in the event stream
     {
         let shard = shard.clone();
+        let cache = cache.clone();
         task::spawn(async move {
             let mut events = shard.events();
 
             while let Some(event) = events.next().await {
                 cache.update(&event);
-
-                println!("{:?}", event);
             }
         });
     }
 
-    rocket::ignite()
-        // .manage(Database::new())
-        .manage(shard)
-        .manage(create_schema())
-        .mount(
-            "/",
-            routes![
-                crate::graphiql,
-                crate::get_graphql_handler,
-                crate::post_graphql_handler
-            ],
-        )
-        .launch()
-    // ctx.lock().await.shutdown_all();
+    #[cfg(debug_attributes)]
+    {
+        let mut shard = shard.clone();
+        ctrlc::set_handler(move || {
+            shard.shutdown();
+            std::process::exit(1);
+        });
+    }
+
+    rocket::custom(
+        Config::build(Environment::active()?)
+            .address("127.0.0.1")
+            .unwrap(),
+    )
+    // .manage(Database::new())
+    .manage(Discord::wrap(cache))
+    .manage(create_schema())
+    .mount(
+        "/",
+        routes![graphiql, get_graphql_handler, post_graphql_handler],
+    )
+    .launch();
+
+    Ok(())
 }
