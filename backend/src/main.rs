@@ -1,21 +1,30 @@
+//! An elaborate, over-engineered solution to shutting my friends up
+
 #![deny(unused_must_use)]
+#![warn(
+    clippy::all,
+    clippy::pedantic,
+    missing_docs,
+    missing_debug_implementations,
+    missing_copy_implementations
+)]
 #![feature(decl_macro, proc_macro_hygiene)]
 
 use anyhow::Context;
 use async_std::{stream::StreamExt, task};
 use content::Html;
-use graphql::{create_schema, Discord, Schema};
+use graphql::{create_schema, DiscordContext, Schema};
 use juniper_rocket::{graphiql_source, GraphQLRequest, GraphQLResponse};
 use log::{debug, error, info, trace, warn};
 use rocket::{config::Environment, response::content, routes, Config, State};
 use std::env;
-use twilight_cache_inmemory::{EventType, InMemoryCacheBuilder};
-use twilight_gateway::shard::ShardBuilder;
+use twilight_cache_inmemory::InMemoryCache;
+use twilight_gateway::{shard::ShardBuilder, Event};
 use twilight_http::Client as HttpClient;
 use twilight_model::{gateway::Intents, id::ChannelId};
 
-mod consts;
-mod graphql;
+pub mod consts;
+pub mod graphql;
 
 const CHANNEL_ID: ChannelId = ChannelId(717435160378867772);
 
@@ -48,7 +57,7 @@ fn graphiql() -> Html<String> {
 
 #[rocket::get("/graphql?<request>")]
 fn get_graphql_handler(
-    context: State<Discord>,
+    context: State<DiscordContext>,
     request: GraphQLRequest,
     schema: State<Schema>,
 ) -> GraphQLResponse {
@@ -57,7 +66,7 @@ fn get_graphql_handler(
 
 #[rocket::post("/graphql", data = "<request>")]
 fn post_graphql_handler(
-    context: State<Discord>,
+    context: State<DiscordContext>,
     request: GraphQLRequest,
     schema: State<Schema>,
 ) -> GraphQLResponse {
@@ -78,16 +87,17 @@ async fn main() -> anyhow::Result<()> {
     let http = HttpClient::new(&token);
 
     let mut shard = ShardBuilder::new(token)
-        .http_client(http)
-        .intents(Intents::GUILD_VOICE_STATES | Intents::GUILDS)
+        .http_client(http.clone())
+        .intents(
+            Intents::GUILDS
+                | Intents::GUILD_VOICE_STATES
+                | Intents::GUILD_MEMBERS
+                | Intents::GUILD_PRESENCES,
+        ) // FIXME: use only ones needed
         .build();
     shard.start().await?;
 
-    let cache = InMemoryCacheBuilder::new()
-        .event_types(
-            EventType::VOICE_STATE_UPDATE | EventType::GUILD_UPDATE | EventType::GUILD_CREATE,
-        )
-        .build();
+    let cache = InMemoryCache::new();
 
     // Startup an event loop for each event in the event stream
     {
@@ -98,6 +108,19 @@ async fn main() -> anyhow::Result<()> {
 
             while let Some(event) = events.next().await {
                 cache.update(&event);
+                if let Event::Ready(ready) = &event {
+                    dbg!(&ready.guilds);
+                }
+                if let Event::GuildUpdate(update) = &event {
+                    dbg!(&update.name);
+                }
+                if let Event::GuildCreate(create) = &event {
+                    dbg!(
+                        &create.members,
+                        cache.guild(create.id),
+                        cache.guild_members(create.id)
+                    );
+                }
             }
         });
     }
@@ -117,7 +140,7 @@ async fn main() -> anyhow::Result<()> {
             .unwrap(),
     )
     // .manage(Database::new())
-    .manage(Discord::wrap(cache))
+    .manage(DiscordContext { cache, http, shard })
     .manage(create_schema())
     .mount(
         "/",

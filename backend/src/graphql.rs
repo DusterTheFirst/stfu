@@ -1,47 +1,188 @@
-use std::ops::Deref;
-
 use anyhow::Context as _;
-use juniper::{Context, FieldResult, GraphQLEnum, GraphQLInputObject, GraphQLObject, RootNode};
-use twilight_cache_inmemory::InMemoryCache;
+use async_std::task;
+use juniper::{Context, FieldResult, RootNode};
+use rarity_permission_calculator::Calculator;
+use std::{
+    collections::HashMap,
+    convert::{TryFrom, TryInto},
+    fmt::Debug,
+    num::TryFromIntError,
+    ops::Deref,
+    sync::Arc,
+};
+use twilight_cache_inmemory::{model::CachedGuild, model::CachedMember, InMemoryCache};
+use twilight_gateway::Shard;
+use twilight_http::Client;
 use twilight_model::{
-    channel::permission_overwrite::PermissionOverwrite,
-    channel::permission_overwrite::PermissionOverwriteType,
-    channel::GuildChannel,
-    guild::Permissions,
+    channel::{self, GuildChannel},
     id::{ChannelId, GuildId, UserId},
+    user::CurrentUser,
+    voice::VoiceState,
 };
 
 use crate::consts::REQUIRED_PERMISSIONS;
 
-pub struct Discord(InMemoryCache);
-impl Discord {
-    pub fn wrap(cache: InMemoryCache) -> Self {
-        Discord(cache)
+#[derive(Debug)]
+/// The juniper context to provide access to the discord api and bot
+pub struct DiscordContext {
+    /// The discord cache connected to the gateway
+    pub cache: InMemoryCache,
+    /// The shard, connected to the gateway
+    pub shard: Shard,
+    /// The discord http client for rest calls
+    pub http: Client,
+}
+impl Context for DiscordContext {}
+
+/// A macro to create transparent wrappers of non graphql types for use with juniper
+macro_rules! transparent_wrapper {
+    (
+        $(
+            $(#[$outer:meta])*
+            struct $wrapper:ident($wrapped:ty);
+        )*
+    ) => {
+        $(
+            #[derive(Clone, Debug)]
+            $(#[$outer])*
+            struct $wrapper($wrapped);
+
+            impl Deref for $wrapper {
+                type Target = $wrapped;
+
+                fn deref(&self) -> &Self::Target {
+                    &self.0
+                }
+            }
+            impl From<$wrapped> for $wrapper {
+                fn from(channel: $wrapped) -> Self {
+                    $wrapper(channel)
+                }
+            }
+        )*
+    };
+}
+
+// Create the wrapper types
+transparent_wrapper! {
+    /// A voice channel voice state
+    struct VoiceChannelState(Arc<VoiceState>);
+    /// A discord channel category
+    struct CategoryChannel(channel::CategoryChannel);
+    /// A discord voice channel
+    struct VoiceChannel(channel::VoiceChannel);
+    /// A discord guild
+    struct Guild(Arc<CachedGuild>);
+    /// A discord guild member
+    struct Member(Arc<CachedMember>);
+    /// The bots' user
+    struct Me(Arc<CurrentUser>);
+}
+
+// Create try from implementation for subtypes of enums
+impl TryFrom<Arc<GuildChannel>> for CategoryChannel {
+    type Error = ();
+
+    fn try_from(channel: Arc<GuildChannel>) -> Result<Self, Self::Error> {
+        match channel.as_ref() {
+            GuildChannel::Category(channel) => Ok(Self(channel.clone())),
+            _ => Err(()),
+        }
     }
 }
-impl Deref for Discord {
-    type Target = InMemoryCache;
+impl TryFrom<Arc<GuildChannel>> for VoiceChannel {
+    type Error = ();
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
+    fn try_from(channel: Arc<GuildChannel>) -> Result<Self, Self::Error> {
+        match channel.as_ref() {
+            GuildChannel::Voice(channel) => Ok(Self(channel.clone())),
+            _ => Err(()),
+        }
     }
 }
-impl Context for Discord {}
 
-/// A discord voice channel
-#[derive(Clone, Debug)]
-struct VoiceChannel {
-    guild: Guild,
-    name: String,
-    id: ChannelId,
-    permission_overwrites: Vec<PermissionOverwrite>,
-    parent_id: Option<ChannelId>,
-    user_limit: Option<u64>,
-    position: i64,
-    // FIXME:
+// Create juniper objects
+#[juniper::object(Context = DiscordContext)]
+impl Member {
+    fn avatar(&self) -> &Option<String> {
+        &self.user.avatar
+    }
+    fn joined_at(&self) -> &Option<String> {
+        &self.joined_at
+    }
+    fn mute(&self) -> bool {
+        self.mute
+    }
+    fn nick(&self) -> &Option<String> {
+        &self.nick
+    }
+    fn color(&self, discord: &DiscordContext) -> FieldResult<Option<i32>> {
+        let mut roles = self
+            .roles
+            .iter()
+            .filter_map(|role_id| discord.cache.role(*role_id))
+            .collect::<Vec<_>>();
+        roles.sort_by_key(|role| role.position);
+        Ok(roles.last().map(|role| role.color.try_into()).transpose()?)
+    }
+    fn discriminator(&self) -> &str {
+        self.user.discriminator.as_str()
+    }
+    fn id(&self) -> String {
+        self.user.id.to_string()
+    }
+    fn name(&self) -> &str {
+        self.user.name.as_str()
+    }
+    fn bot(&self) -> bool {
+        self.user.bot
+    }
 }
 
-#[juniper::object(Context = Discord)]
+#[juniper::object(Context = DiscordContext)]
+impl VoiceChannelState {
+    fn id(&self) -> String {
+        self.user_id.to_string()
+    }
+    fn deaf(&self) -> bool {
+        self.deaf
+    }
+    fn mute(&self) -> bool {
+        self.mute
+    }
+    fn self_deaf(&self) -> bool {
+        self.self_deaf
+    }
+    fn self_mute(&self) -> bool {
+        self.self_mute
+    }
+    fn member(&self, discord: &DiscordContext) -> FieldResult<Member> {
+        Ok(discord
+            .cache
+            .member(
+                self.guild_id
+                    .context("Voice channel provided was not in a guild")?,
+                self.user_id,
+            )
+            .context("Member does not exist in cache")?
+            .into())
+    }
+}
+
+#[juniper::object]
+impl CategoryChannel {
+    fn id(&self) -> String {
+        self.id.to_string()
+    }
+    fn name(&self) -> &str {
+        self.name.as_ref()
+    }
+    fn position(&self) -> FieldResult<i32> {
+        Ok(self.position.try_into()?)
+    }
+}
+
+#[juniper::object(Context = DiscordContext)]
 impl VoiceChannel {
     fn name(&self) -> &str {
         self.name.as_str()
@@ -49,63 +190,78 @@ impl VoiceChannel {
     fn id(&self) -> String {
         self.id.to_string()
     }
-    // TODO:
+    fn user_limit(&self) -> FieldResult<Option<i32>> {
+        Ok(self
+            .user_limit
+            .map(|limit| i32::try_from(limit))
+            .transpose()?)
+    }
+    fn position(&self) -> FieldResult<i32> {
+        Ok(self.position.try_into()?)
+    }
+    fn category(&self, discord: &DiscordContext) -> Option<CategoryChannel> {
+        self.parent_id
+            .map(|parent_id| {
+                discord
+                    .cache
+                    .guild_channel(parent_id)
+                    .map(|parent| parent.try_into().ok())
+                    .flatten()
+            })
+            .flatten()
+    }
 
     /// If the bot can operate on the guild
-    fn can_operate(&self, context: &Discord) -> FieldResult<bool> {
-        let mut permissions = self.guild.permissions.unwrap_or(Permissions::empty());
+    fn can_operate(&self, discord: &DiscordContext) -> FieldResult<bool> {
+        let guild_id = self.guild_id.context("Voice channel missing guild_id")?;
+        let guild = discord
+            .cache
+            .guild(guild_id)
+            .context("Voice channel guild does not exist")?;
+        let roles = discord
+            .cache
+            .guild_roles(guild_id)
+            .context("Unable to get roles for the guild")?
+            .into_iter()
+            .map(|role_id| {
+                discord
+                    .cache
+                    .role(role_id)
+                    .map(|role| (role_id, role.permissions))
+            })
+            .collect::<Option<HashMap<_, _>>>()
+            .context("Failed to get role information from cache")?;
 
-        let bot_user = context
+        let bot_user = discord
+            .cache
             .current_user()
             .context("The bot was unable to get information on its user")?;
 
-        let bot_member = context
-            .member(self.guild.id, bot_user.id)
+        let bot_member = discord
+            .cache
+            .member(guild_id, bot_user.id)
             .context("The bot was unable to get information on itself in the guild")?;
 
-        for overwrite in &self.permission_overwrites {
-            match overwrite.kind {
-                PermissionOverwriteType::Role(id) if bot_member.roles.contains(&id) => {
-                    permissions.set(overwrite.allow, true);
-                    permissions.set(overwrite.deny, false);
-                }
-                PermissionOverwriteType::Member(id) if id == bot_user.id => {
-                    permissions.set(overwrite.allow, true);
-                    permissions.set(overwrite.deny, false);
-                }
-                _ => {}
-            }
-        }
+        let permissions = Calculator::new(guild_id, guild.owner_id, &roles)
+            .member(bot_user.id, bot_member.roles.as_slice())
+            .in_channel(self.kind, self.permission_overwrites.as_slice())?;
 
         Ok(permissions.contains(REQUIRED_PERMISSIONS))
     }
 
-    // fn members(&self) -> &[String] {
-    //     self.members.as_slice()
-    // }
+    fn states(&self, discord: &DiscordContext) -> FieldResult<Vec<VoiceChannelState>> {
+        Ok(discord
+            .cache
+            .voice_channel_states(self.id)
+            .context("Failed to get voice channel states for the channel")?
+            .into_iter()
+            .map(|state| state.into())
+            .collect())
+    }
 }
 
 /// A discord guild
-#[derive(Clone, Debug)]
-struct Guild {
-    /// The guilds snowflake id
-    pub id: GuildId,
-    // The guilds name
-    pub name: String,
-    /// Weather or not the guild is unavailable
-    pub unavailable: bool,
-    /// The snowflake id of the owner of the guild
-    pub owner_id: UserId,
-    /// The icon of the guild
-    pub icon: Option<String>,
-    /// The banner of the guild
-    pub banner: Option<String>,
-    /// The permissions of the guild
-    pub permissions: Option<Permissions>,
-}
-
-/// A discord guild
-#[juniper::object(Context = Discord)]
+#[juniper::object(Context = DiscordContext)]
 impl Guild {
     /// The guilds snowflake id
     fn id(&self) -> String {
@@ -132,61 +288,123 @@ impl Guild {
         self.banner.as_ref()
     }
     /// Get the voice channels in the guild
-    fn voice_channels(&self, context: &Discord) -> Option<Vec<VoiceChannel>> {
-        context.guild_channels(self.id).map(|ids| {
-            ids.into_iter()
-                .filter_map(|id| {
-                    context
-                        .guild_channel(id)
-                        .map(|c| match c.as_ref() {
-                            GuildChannel::Voice(c) => Some(VoiceChannel {
-                                guild: self.clone(),
-                                id,
-                                name: c.name.clone(),
-                                permission_overwrites: c.permission_overwrites.clone(),
-                                user_limit: c.user_limit,
-                                parent_id: c.parent_id,
-                                position: c.position,
-                            }),
-                            _ => None,
-                        })
-                        .flatten()
-                })
-                .collect::<Vec<_>>()
-        })
+    fn voice_channels(&self, discord: &DiscordContext) -> Vec<VoiceChannel> {
+        discord
+            .cache
+            .guild_channels(self.id)
+            .map(|ids| {
+                ids.into_iter()
+                    .filter_map(|id| {
+                        discord
+                            .cache
+                            .guild_channel(id)
+                            .map(|c| c.try_into().ok())
+                            .flatten()
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+    }
+    /// Get a specific voice channel in the guild
+    fn voice_channel(
+        &self,
+        discord: &DiscordContext,
+        id: String,
+    ) -> FieldResult<Option<VoiceChannel>> {
+        Ok(discord
+            .cache
+            .guild_channel(ChannelId(id.parse().context("Invalid channel id")?))
+            .map(|c| c.try_into().ok())
+            .flatten())
+    }
+    fn members(&self, discord: &DiscordContext) -> Vec<Member> {
+        dbg!(discord.cache.guild_members(self.id))
+            .map(|ids| {
+                ids.into_iter()
+                    .filter_map(|id| {
+                        discord
+                            .cache
+                            .member(self.id, id)
+                            .map(|member| member.into())
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+    fn member(&self, discord: &DiscordContext, id: String) -> FieldResult<Option<Member>> {
+        Ok(dbg!(discord
+            .cache
+            .member(self.id, UserId(id.parse().context("Invalid user id")?)))
+        .map(|member| member.into()))
     }
 }
 
-/// The bots' user
-#[derive(GraphQLObject, Clone, Debug)]
-struct Me {}
+#[juniper::object]
+impl Me {
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn id(&self) -> String {
+        self.id.to_string()
+    }
+    fn discriminator(&self) -> &str {
+        &self.discriminator
+    }
+}
 
+#[derive(Copy, Clone, Debug)]
+/// The root object for GraphQL queries
 pub struct QueryRoot;
 
-#[juniper::object(Context = Discord)]
+#[juniper::object(Context = DiscordContext)]
 impl QueryRoot {
-    fn guild(context: &Discord, id: String) -> FieldResult<Option<Guild>> {
-        let id = GuildId::from(id.parse::<u64>()?);
-
-        Ok(context.guild(id).map(|guild| Guild {
-            id,
-            unavailable: guild.unavailable,
-            owner_id: guild.owner_id,
-            icon: guild.icon.clone(),
-            banner: guild.banner.clone(),
-            name: guild.name.clone(),
-            permissions: guild.permissions,
-        }))
+    /// Get a guild by id
+    fn guild(discord: &DiscordContext, id: String) -> FieldResult<Option<Guild>> {
+        Ok(discord
+            .cache
+            .guild(GuildId(id.parse().context("Invalid guild id")?))
+            .map(|g| g.into()))
     }
-    fn me(&self, context: &Discord) -> Option<Me> {
-        context.current_user();
-        todo!()
+    fn shared_guilds(discord: &DiscordContext, user: String) -> FieldResult<Vec<Guild>> {
+        task::block_on(async {
+            let user = UserId(user.parse().context("Invalid user id")?);
+
+            for guild in discord.http.current_user_guilds().limit(100)?.await? {}
+
+            Ok(vec![]) //FIXME:
+        })
+
+        // Ok(
+        //     .into_iter()
+        //     .filter(async |guild| {
+        //         discord
+        //             .http
+        //             .guild_members(guild.id)
+        //             .await
+        //             .context("Failed to get the guild members from a guild")?
+        //             .into_iter()
+        //             .any(|member| member.user.id == user)
+        //     })
+        //     .map(|guild| {
+        //         discord
+        //             .cache
+        //             .guild(guild.id)
+        //             .context("Guild not found in cache")?
+        //             .into()
+        //     })
+        //     .collect())
+    }
+    /// Get information about the bot user
+    fn me(&self, discord: &DiscordContext) -> Option<Me> {
+        discord.cache.current_user().map(|user| user.into())
     }
 }
 
+#[derive(Copy, Clone, Debug)]
+/// The root object for GraphQL mutations
 pub struct MutationRoot;
 
-#[juniper::object(Context = Discord)]
+#[juniper::object(Context = DiscordContext)]
 impl MutationRoot {
     // fn create_human(new_human: NewHuman) -> FieldResult<Human> {
     //     Ok(Human {
@@ -198,8 +416,10 @@ impl MutationRoot {
     // }
 }
 
+/// The graphql schema described in this file
 pub type Schema = RootNode<'static, QueryRoot, MutationRoot>;
 
+/// Create the GraphQL schema described in this file
 pub fn create_schema() -> Schema {
     Schema::new(QueryRoot, MutationRoot)
 }
