@@ -17,6 +17,7 @@ use graphql::{create_schema, DiscordContext, Schema};
 use juniper_rocket::{graphiql_source, GraphQLRequest, GraphQLResponse};
 use log::{debug, error, info, trace, warn};
 use rocket::{config::Environment, response::content, routes, Config, State};
+use rocket_cors::{Cors, CorsOptions};
 use std::env;
 use twilight_cache_inmemory::InMemoryCache;
 use twilight_gateway::{shard::ShardBuilder, Event};
@@ -81,8 +82,12 @@ async fn main() -> anyhow::Result<()> {
     );
     pretty_env_logger::init();
 
+    #[cfg(not(feature = "generate_schema"))]
     let token = env::var("DISCORD_TOKEN")
         .context("You must provide a DISCORD_TOKEN environment variable")?;
+
+    #[cfg(feature = "generate_schema")]
+    let token = "".to_owned();
 
     let http = HttpClient::new(&token);
 
@@ -95,12 +100,14 @@ async fn main() -> anyhow::Result<()> {
                 | Intents::GUILD_PRESENCES,
         ) // FIXME: use only ones needed
         .build();
-    shard.start().await?;
 
     let cache = InMemoryCache::new();
 
     // Startup an event loop for each event in the event stream
+    #[cfg(not(feature = "generate_schema"))]
     {
+        shard.start().await?;
+
         let shard = shard.clone();
         let cache = cache.clone();
         task::spawn(async move {
@@ -108,24 +115,11 @@ async fn main() -> anyhow::Result<()> {
 
             while let Some(event) = events.next().await {
                 cache.update(&event);
-                if let Event::Ready(ready) = &event {
-                    dbg!(&ready.guilds);
-                }
-                if let Event::GuildUpdate(update) = &event {
-                    dbg!(&update.name);
-                }
-                if let Event::GuildCreate(create) = &event {
-                    dbg!(
-                        &create.members,
-                        cache.guild(create.id),
-                        cache.guild_members(create.id)
-                    );
-                }
             }
         });
     }
 
-    #[cfg(debug_attributes)]
+    #[cfg(all(debug_attributes, not(feature = "generate_schema")))]
     {
         let mut shard = shard.clone();
         ctrlc::set_handler(move || {
@@ -134,19 +128,39 @@ async fn main() -> anyhow::Result<()> {
         });
     }
 
-    rocket::custom(
-        Config::build(Environment::active()?)
-            .address("127.0.0.1")
-            .unwrap(),
-    )
-    // .manage(Database::new())
-    .manage(DiscordContext { cache, http, shard })
-    .manage(create_schema())
-    .mount(
-        "/",
-        routes![graphiql, get_graphql_handler, post_graphql_handler],
-    )
-    .launch();
+    let context = DiscordContext { cache, http, shard };
+    let schema = create_schema();
+
+    #[cfg(feature = "generate_schema")]
+    {
+        let (res, _errors) = juniper::introspect(&schema, &context, Default::default()).unwrap();
+
+        let mut file = std::fs::File::create(format!("{}/../target/graphql.json", env!("CARGO_MANIFEST_DIR"))).unwrap();
+        std::io::Write::write(&mut file, serde_json::to_string_pretty(&res).unwrap().as_bytes()).unwrap();
+    }
+    #[cfg(not(feature = "generate_schema"))]
+    {
+        rocket::custom(
+            Config::build(Environment::active()?)
+                .address("127.0.0.1")
+                .unwrap(),
+        )
+        // .manage(Database::new())
+        .manage(context)
+        .manage(schema)
+        .mount(
+            "/",
+            routes![graphiql, get_graphql_handler, post_graphql_handler],
+        )
+        .attach(
+            Cors::from_options(&CorsOptions {
+                // allow_credentials: true,
+                ..Default::default()
+            })
+            .context("Failed to setup cors")?,
+        )
+        .launch();
+    }
 
     Ok(())
 }

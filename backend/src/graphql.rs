@@ -120,7 +120,8 @@ impl Member {
         let mut roles = self
             .roles
             .iter()
-            .filter_map(|role_id| discord.cache.role(*role_id))
+            .cloned()
+            .filter_map(|role_id| discord.cache.role(role_id))
             .collect::<Vec<_>>();
         roles.sort_by_key(|role| role.position);
         Ok(roles.last().map(|role| role.color.try_into()).transpose()?)
@@ -249,14 +250,14 @@ impl VoiceChannel {
         Ok(permissions.contains(REQUIRED_PERMISSIONS))
     }
 
-    fn states(&self, discord: &DiscordContext) -> FieldResult<Vec<VoiceChannelState>> {
-        Ok(discord
+    fn states(&self, discord: &DiscordContext) -> Vec<VoiceChannelState> {
+        discord
             .cache
             .voice_channel_states(self.id)
-            .context("Failed to get voice channel states for the channel")?
+            .unwrap_or_default()
             .into_iter()
             .map(|state| state.into())
-            .collect())
+            .collect()
     }
 }
 
@@ -318,7 +319,9 @@ impl Guild {
             .flatten())
     }
     fn members(&self, discord: &DiscordContext) -> Vec<Member> {
-        dbg!(discord.cache.guild_members(self.id))
+        discord
+            .cache
+            .guild_members(self.id)
             .map(|ids| {
                 ids.into_iter()
                     .filter_map(|id| {
@@ -332,10 +335,10 @@ impl Guild {
             .unwrap_or_default()
     }
     fn member(&self, discord: &DiscordContext, id: String) -> FieldResult<Option<Member>> {
-        Ok(dbg!(discord
+        Ok(discord
             .cache
-            .member(self.id, UserId(id.parse().context("Invalid user id")?)))
-        .map(|member| member.into()))
+            .member(self.id, UserId(id.parse().context("Invalid user id")?))
+            .map(|member| member.into()))
     }
 }
 
@@ -365,35 +368,35 @@ impl QueryRoot {
             .guild(GuildId(id.parse().context("Invalid guild id")?))
             .map(|g| g.into()))
     }
-    fn shared_guilds(discord: &DiscordContext, user: String) -> FieldResult<Vec<Guild>> {
-        task::block_on(async {
-            let user = UserId(user.parse().context("Invalid user id")?);
+    // fn shared_guilds(discord: &DiscordContext, user: String) -> FieldResult<Vec<Guild>> {
+    //     task::block_on(async {
+    //         let user = UserId(user.parse().context("Invalid user id")?);
 
-            for guild in discord.http.current_user_guilds().limit(100)?.await? {}
+    //         for guild in discord.http.current_user_guilds().limit(100)?.await? {}
 
-            Ok(vec![]) //FIXME:
-        })
+    //         Ok(vec![]) //FIXME:
+    //     })
 
-        // Ok(
-        //     .into_iter()
-        //     .filter(async |guild| {
-        //         discord
-        //             .http
-        //             .guild_members(guild.id)
-        //             .await
-        //             .context("Failed to get the guild members from a guild")?
-        //             .into_iter()
-        //             .any(|member| member.user.id == user)
-        //     })
-        //     .map(|guild| {
-        //         discord
-        //             .cache
-        //             .guild(guild.id)
-        //             .context("Guild not found in cache")?
-        //             .into()
-        //     })
-        //     .collect())
-    }
+    //     // Ok(
+    //     //     .into_iter()
+    //     //     .filter(async |guild| {
+    //     //         discord
+    //     //             .http
+    //     //             .guild_members(guild.id)
+    //     //             .await
+    //     //             .context("Failed to get the guild members from a guild")?
+    //     //             .into_iter()
+    //     //             .any(|member| member.user.id == user)
+    //     //     })
+    //     //     .map(|guild| {
+    //     //         discord
+    //     //             .cache
+    //     //             .guild(guild.id)
+    //     //             .context("Guild not found in cache")?
+    //     //             .into()
+    //     //     })
+    //     //     .collect())
+    // }
     /// Get information about the bot user
     fn me(&self, discord: &DiscordContext) -> Option<Me> {
         discord.cache.current_user().map(|user| user.into())
@@ -406,6 +409,9 @@ pub struct MutationRoot;
 
 #[juniper::object(Context = DiscordContext)]
 impl MutationRoot {
+    fn void() -> String {
+        "ok".into()
+    }
     // fn create_human(new_human: NewHuman) -> FieldResult<Human> {
     //     Ok(Human {
     //         id: "1234".to_owned(),
