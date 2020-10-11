@@ -1,18 +1,20 @@
-backend-build-schema:
+build-schema:
 	cd backend && cargo run --features=generate_schema
 	just yarn codegen
+
+clean-schema:
+	find . -type d -name __generated__ -prune -exec echo {} \;
+
+schema:
+	cargo watch -s "just build-schema" -w frontend -w backend -i "**/__generated__/**"
 
 backend-build:
 	cargo build --release
 
-backend-run: backend-build-schema
-	cargo run
-
 backend:
-	cargo watch -s "just backend-run" -w backend
+	cargo watch -x run -w backend
 
-frontend:
-	cargo watch -s "just backend-build-schema" -w frontend -i "**/__generated__/**"
+frontend: (yarn "start")
 
 yarn action:
 	cd frontend && yarn run {{action}}
