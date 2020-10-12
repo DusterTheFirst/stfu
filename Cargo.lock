@@ -1544,7 +1544,7 @@ version = "0.1.0"
 source = "git+https://github.com/rarity-rs/permission-calculator?branch=main#1b25e9aeb1baec6a0cd11f054c21b735aca68288"
 dependencies = [
  "tracing",
- "twilight-model",
+ "twilight-model 0.1.3 (git+https://github.com/DusterTheFirst/twilight?branch=trunk)",
 ]
 
 [[package]]
@@ -1880,7 +1880,8 @@ dependencies = [
  "twilight-gateway",
  "twilight-http",
  "twilight-mention",
- "twilight-model",
+ "twilight-model 0.1.3 (git+https://github.com/DusterTheFirst/twilight?branch=trunk)",
+ "twilight-oauth2",
  "twilight-standby",
 ]
 
@@ -2086,21 +2087,21 @@ dependencies = [
  "dashmap",
  "serde",
  "tracing",
- "twilight-model",
+ "twilight-model 0.1.3 (git+https://github.com/DusterTheFirst/twilight?branch=trunk)",
 ]
 
 [[package]]
 name = "twilight-embed-builder"
 version = "0.1.0"
-source = "git+https://github.com/DusterTheFirst/twilight?branch=trunk#a58cc32f62db822fc7e83696b5b32c26225133a7"
+source = "git+https://github.com/DusterTheFirst/twilight?branch=trunk#3f336d1911f20aa4dfc91353ac32cd8d5b91d6b9"
 dependencies = [
- "twilight-model",
+ "twilight-model 0.1.3 (git+https://github.com/DusterTheFirst/twilight?branch=trunk)",
 ]
 
 [[package]]
 name = "twilight-gateway"
 version = "0.1.3"
-source = "git+https://github.com/DusterTheFirst/twilight?branch=trunk#a58cc32f62db822fc7e83696b5b32c26225133a7"
+source = "git+https://github.com/DusterTheFirst/twilight?branch=trunk#3f336d1911f20aa4dfc91353ac32cd8d5b91d6b9"
 dependencies = [
  "async-tungstenite",
  "bitflags",
@@ -2115,14 +2116,14 @@ dependencies = [
  "tracing",
  "twilight-gateway-queue",
  "twilight-http",
- "twilight-model",
+ "twilight-model 0.1.3 (git+https://github.com/DusterTheFirst/twilight?branch=trunk)",
  "url 2.1.1",
 ]
 
 [[package]]
 name = "twilight-gateway-queue"
 version = "0.1.0"
-source = "git+https://github.com/DusterTheFirst/twilight?branch=trunk#a58cc32f62db822fc7e83696b5b32c26225133a7"
+source = "git+https://github.com/DusterTheFirst/twilight?branch=trunk#3f336d1911f20aa4dfc91353ac32cd8d5b91d6b9"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -2134,7 +2135,7 @@ dependencies = [
 [[package]]
 name = "twilight-http"
 version = "0.1.6"
-source = "git+https://github.com/DusterTheFirst/twilight?branch=trunk#a58cc32f62db822fc7e83696b5b32c26225133a7"
+source = "git+https://github.com/DusterTheFirst/twilight?branch=trunk#3f336d1911f20aa4dfc91353ac32cd8d5b91d6b9"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -2146,16 +2147,29 @@ dependencies = [
  "serde_repr",
  "tokio",
  "tracing",
- "twilight-model",
+ "twilight-model 0.1.3 (git+https://github.com/DusterTheFirst/twilight?branch=trunk)",
  "url 2.1.1",
 ]
 
 [[package]]
 name = "twilight-mention"
 version = "0.1.1"
-source = "git+https://github.com/DusterTheFirst/twilight?branch=trunk#a58cc32f62db822fc7e83696b5b32c26225133a7"
+source = "git+https://github.com/DusterTheFirst/twilight?branch=trunk#3f336d1911f20aa4dfc91353ac32cd8d5b91d6b9"
 dependencies = [
- "twilight-model",
+ "twilight-model 0.1.3 (git+https://github.com/DusterTheFirst/twilight?branch=trunk)",
+]
+
+[[package]]
+name = "twilight-model"
+version = "0.1.3"
+source = "git+https://github.com/vivian/twilight?branch=oauth2#6851da5e0699d13bb671c1a6cc93c63d7a08b0bc"
+dependencies = [
+ "bitflags",
+ "serde",
+ "serde-mappable-seq",
+ "serde-value",
+ "serde_repr",
+ "tracing",
 ]
 
 [[package]]
@@ -2172,15 +2186,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "twilight-oauth2"
+version = "0.1.0"
+source = "git+https://github.com/vivian/twilight?branch=oauth2#6851da5e0699d13bb671c1a6cc93c63d7a08b0bc"
+dependencies = [
+ "serde",
+ "twilight-model 0.1.3 (git+https://github.com/vivian/twilight?branch=oauth2)",
+ "url 2.1.1",
+ "urlencoding",
+]
+
+[[package]]
 name = "twilight-standby"
 version = "0.1.1"
-source = "git+https://github.com/DusterTheFirst/twilight?branch=trunk#a58cc32f62db822fc7e83696b5b32c26225133a7"
+source = "git+https://github.com/DusterTheFirst/twilight?branch=trunk#3f336d1911f20aa4dfc91353ac32cd8d5b91d6b9"
 dependencies = [
  "dashmap",
  "futures-channel",
  "futures-util",
  "tracing",
- "twilight-model",
+ "twilight-model 0.1.3 (git+https://github.com/DusterTheFirst/twilight?branch=trunk)",
 ]
 
 [[package]]
@@ -2290,6 +2315,12 @@ dependencies = [
  "matches",
  "percent-encoding 2.1.0",
 ]
+
+[[package]]
+name = "urlencoding"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9232eb53352b4442e40d7900465dfc534e8cb2dc8f18656fcb2ac16112b5593"
 
 [[package]]
 name = "utf-8"

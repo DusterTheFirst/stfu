@@ -8,10 +8,12 @@
     missing_debug_implementations,
     missing_copy_implementations
 )]
+#![cfg_attr(feature = "generate_schema", allow(unused_imports))]
 #![feature(decl_macro, proc_macro_hygiene)]
 
 use anyhow::Context;
 use async_std::{stream::StreamExt, task};
+use consts::defaults;
 use content::Html;
 use graphql::{create_schema, DiscordContext, Schema};
 use juniper_rocket::{graphiql_source, GraphQLRequest, GraphQLResponse};
@@ -20,14 +22,12 @@ use rocket::{config::Environment, response::content, routes, Config, State};
 use rocket_cors::{Cors, CorsOptions};
 use std::env;
 use twilight_cache_inmemory::InMemoryCache;
-use twilight_gateway::{shard::ShardBuilder, Event};
+use twilight_gateway::shard::ShardBuilder;
 use twilight_http::Client as HttpClient;
-use twilight_model::{gateway::Intents, id::ChannelId};
+use twilight_model::{gateway::Intents, id::ApplicationId};
 
 pub mod consts;
 pub mod graphql;
-
-const CHANNEL_ID: ChannelId = ChannelId(717435160378867772);
 
 // struct Handler;
 
@@ -74,6 +74,7 @@ fn post_graphql_handler(
     request.execute(&schema, context.inner())
 }
 
+#[cfg(not(feature = "generate_schema"))]
 #[async_std::main]
 async fn main() -> anyhow::Result<()> {
     env::set_var(
@@ -82,12 +83,25 @@ async fn main() -> anyhow::Result<()> {
     );
     pretty_env_logger::init();
 
-    #[cfg(not(feature = "generate_schema"))]
     let token = env::var("DISCORD_TOKEN")
         .context("You must provide a DISCORD_TOKEN environment variable")?;
 
-    #[cfg(feature = "generate_schema")]
-    let token = "".to_owned();
+    let client_secret = env::var("CLIENT_SECRET")
+        .context("You must provide a CLIENT_SECRET environment variable")?;
+
+    // TODO: config?
+    let client_id = env::var("CLIENT_ID").map(|id| ApplicationId(id.parse().unwrap())).unwrap_or_else(|_| {
+        warn!("No CLIENT_ID environment variable provided, defaulting to client id in consts");
+        defaults::CLIENT_ID
+    });
+    let redirect_uris = env::var("REDIRECT_URLS")
+        .map(|all| all.split(",").map(|url| url.trim()).collect::<Vec<_>>())
+        .unwrap_or_else(|_| {
+            warn!("No REDIRECT_URLS environment variable provided, defaulting to redirect urls in consts");
+            defaults::REDIRECT_URLS.to_vec()
+        });
+
+    let oauth = twilight_oauth2::Client::new(client_id, client_secret, redirect_uris.as_slice());
 
     let http = HttpClient::new(&token);
 
@@ -100,14 +114,12 @@ async fn main() -> anyhow::Result<()> {
                 | Intents::GUILD_PRESENCES,
         ) // FIXME: use only ones needed
         .build();
+    shard.start().await?;
 
     let cache = InMemoryCache::new();
 
     // Startup an event loop for each event in the event stream
-    #[cfg(not(feature = "generate_schema"))]
     {
-        shard.start().await?;
-
         let shard = shard.clone();
         let cache = cache.clone();
         task::spawn(async move {
@@ -119,7 +131,7 @@ async fn main() -> anyhow::Result<()> {
         });
     }
 
-    #[cfg(all(debug_attributes, not(feature = "generate_schema")))]
+    #[cfg(debug_attributes)]
     {
         let mut shard = shard.clone();
         ctrlc::set_handler(move || {
@@ -128,39 +140,57 @@ async fn main() -> anyhow::Result<()> {
         });
     }
 
-    let context = DiscordContext { cache, http, shard };
-    let schema = create_schema();
-
-    #[cfg(feature = "generate_schema")]
-    {
-        let (res, _errors) = juniper::introspect(&schema, &context, Default::default()).unwrap();
-
-        let mut file = std::fs::File::create(format!("{}/../target/graphql.json", env!("CARGO_MANIFEST_DIR"))).unwrap();
-        std::io::Write::write(&mut file, serde_json::to_string_pretty(&res).unwrap().as_bytes()).unwrap();
-    }
-    #[cfg(not(feature = "generate_schema"))]
-    {
-        rocket::custom(
-            Config::build(Environment::active()?)
-                .address("127.0.0.1")
-                .unwrap(),
-        )
-        // .manage(Database::new())
-        .manage(context)
-        .manage(schema)
-        .mount(
-            "/",
-            routes![graphiql, get_graphql_handler, post_graphql_handler],
-        )
-        .attach(
-            Cors::from_options(&CorsOptions {
-                // allow_credentials: true,
-                ..Default::default()
-            })
-            .context("Failed to setup cors")?,
-        )
-        .launch();
-    }
+    rocket::custom(
+        Config::build(Environment::active()?)
+            .address("127.0.0.1")
+            .unwrap(),
+    )
+    // .manage(Database::new())
+    .manage(DiscordContext { cache, http, shard })
+    .manage(create_schema())
+    .mount(
+        "/",
+        routes![graphiql, get_graphql_handler, post_graphql_handler],
+    )
+    .attach(
+        Cors::from_options(&CorsOptions {
+            // allow_credentials: true,
+            ..Default::default()
+        })
+        .context("Failed to setup cors")?,
+    )
+    .launch();
 
     Ok(())
+}
+
+#[cfg(feature = "generate_schema")]
+#[async_std::main] // FIXME: maybe move to test or build script
+async fn main() {
+    let http = HttpClient::new("");
+
+    let shard = ShardBuilder::new("")
+        .http_client(http.clone())
+        .intents(Intents::empty())
+        .build();
+
+    let cache = InMemoryCache::new();
+
+    let (res, _errors) = juniper::introspect(
+        &create_schema(),
+        &DiscordContext { cache, http, shard },
+        Default::default(),
+    )
+    .unwrap();
+
+    let mut file = std::fs::File::create(format!(
+        "{}/../target/graphql.json",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .unwrap();
+    std::io::Write::write(
+        &mut file,
+        serde_json::to_string_pretty(&res).unwrap().as_bytes(),
+    )
+    .unwrap();
 }

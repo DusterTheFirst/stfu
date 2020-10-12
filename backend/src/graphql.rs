@@ -1,12 +1,12 @@
+//! The definitions for the graphql api
+
 use anyhow::Context as _;
-use async_std::task;
 use juniper::{Context, FieldResult, RootNode};
 use rarity_permission_calculator::Calculator;
 use std::{
     collections::HashMap,
     convert::{TryFrom, TryInto},
     fmt::Debug,
-    num::TryFromIntError,
     ops::Deref,
     sync::Arc,
 };
@@ -39,13 +39,13 @@ macro_rules! transparent_wrapper {
     (
         $(
             $(#[$outer:meta])*
-            struct $wrapper:ident($wrapped:ty);
+            pub struct $wrapper:ident($wrapped:ty);
         )*
     ) => {
         $(
             #[derive(Clone, Debug)]
             $(#[$outer])*
-            struct $wrapper($wrapped);
+            pub struct $wrapper($wrapped);
 
             impl Deref for $wrapper {
                 type Target = $wrapped;
@@ -66,17 +66,17 @@ macro_rules! transparent_wrapper {
 // Create the wrapper types
 transparent_wrapper! {
     /// A voice channel voice state
-    struct VoiceChannelState(Arc<VoiceState>);
+    pub struct VoiceChannelState(Arc<VoiceState>);
     /// A discord channel category
-    struct CategoryChannel(channel::CategoryChannel);
+    pub struct CategoryChannel(channel::CategoryChannel);
     /// A discord voice channel
-    struct VoiceChannel(channel::VoiceChannel);
+    pub struct VoiceChannel(channel::VoiceChannel);
     /// A discord guild
-    struct Guild(Arc<CachedGuild>);
+    pub struct Guild(Arc<CachedGuild>);
     /// A discord guild member
-    struct Member(Arc<CachedMember>);
+    pub struct Member(Arc<CachedMember>);
     /// The bots' user
-    struct Me(Arc<CurrentUser>);
+    pub struct Me(Arc<CurrentUser>);
 }
 
 // Create try from implementation for subtypes of enums
@@ -104,11 +104,11 @@ impl TryFrom<Arc<GuildChannel>> for VoiceChannel {
 // Create juniper objects
 #[juniper::object(Context = DiscordContext)]
 impl Member {
-    fn avatar(&self) -> &Option<String> {
-        &self.user.avatar
+    fn avatar(&self) -> Option<&String> {
+        self.user.avatar.as_ref()
     }
-    fn joined_at(&self) -> &Option<String> {
-        &self.joined_at
+    fn joined_at(&self) -> Option<&String> {
+        self.joined_at.as_ref()
     }
     fn mute(&self) -> bool {
         self.mute
