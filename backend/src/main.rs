@@ -86,34 +86,34 @@ async fn main() -> anyhow::Result<()> {
     let token = env::var("DISCORD_TOKEN")
         .context("You must provide a DISCORD_TOKEN environment variable")?;
 
-    let client_secret = env::var("CLIENT_SECRET")
-        .context("You must provide a CLIENT_SECRET environment variable")?;
+    // let client_secret = env::var("CLIENT_SECRET")
+    //     .context("You must provide a CLIENT_SECRET environment variable")?;
 
-    // TODO: config?
-    let client_id = env::var("CLIENT_ID").map(|id| ApplicationId(id.parse().unwrap())).unwrap_or_else(|_| {
-        warn!("No CLIENT_ID environment variable provided, defaulting to client id in consts");
-        defaults::CLIENT_ID
-    });
-    let redirect_uris = env::var("REDIRECT_URLS")
-        .map(|all| all.split(",").map(|url| url.trim()).collect::<Vec<_>>())
-        .unwrap_or_else(|_| {
-            warn!("No REDIRECT_URLS environment variable provided, defaulting to redirect urls in consts");
-            defaults::REDIRECT_URLS.to_vec()
-        });
+    // // TODO: config?
+    // let client_id = env::var("CLIENT_ID").map(|id| ApplicationId(id.parse().unwrap())).unwrap_or_else(|_| {
+    //     warn!("No CLIENT_ID environment variable provided, defaulting to client id in consts");
+    //     defaults::CLIENT_ID
+    // });
+    // let redirect_uris = env::var("REDIRECT_URLS")
+    //     .map(|all| all.split(",").map(|url| url.trim()).collect::<Vec<_>>())
+    //     .unwrap_or_else(|_| {
+    //         warn!("No REDIRECT_URLS environment variable provided, defaulting to redirect urls in consts");
+    //         defaults::REDIRECT_URLS.to_vec()
+    //     });
 
-    let oauth = twilight_oauth2::Client::new(client_id, client_secret, redirect_uris.as_slice());
+    // let oauth = twilight_oauth2::Client::new(client_id, client_secret, redirect_uris.as_slice());
 
     let http = HttpClient::new(&token);
 
-    let mut shard = ShardBuilder::new(token)
-        .http_client(http.clone())
-        .intents(
-            Intents::GUILDS
-                | Intents::GUILD_VOICE_STATES
-                | Intents::GUILD_MEMBERS
-                | Intents::GUILD_PRESENCES,
-        ) // FIXME: use only ones needed
-        .build();
+    let mut shard = ShardBuilder::new(
+        token,
+        Intents::GUILDS
+            | Intents::GUILD_VOICE_STATES
+            | Intents::GUILD_MEMBERS
+            | Intents::GUILD_PRESENCES,
+    )
+    .http_client(http.clone())
+    .build();
     shard.start().await?;
 
     let cache = InMemoryCache::new();
@@ -169,9 +169,8 @@ async fn main() -> anyhow::Result<()> {
 async fn main() {
     let http = HttpClient::new("");
 
-    let shard = ShardBuilder::new("")
+    let shard = ShardBuilder::new("", Intents::empty())
         .http_client(http.clone())
-        .intents(Intents::empty())
         .build();
 
     let cache = InMemoryCache::new();

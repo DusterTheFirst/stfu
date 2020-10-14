@@ -1,6 +1,6 @@
 //! Constants shared across the program
 
-use twilight_model::guild::Permissions;
+use rarity_permission_calculator::prelude::Permissions; // TODO: change once v2 hits
 
 /// The required permissions for the bot to function
 pub const REQUIRED_PERMISSIONS: Permissions = Permissions::from_bits_truncate(

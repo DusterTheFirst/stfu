@@ -1,17 +1,20 @@
 import { gql, useQuery } from '@apollo/client';
 import React from 'react';
+import { Link, Route, HashRouter as Router, Switch } from 'react-router-dom';
 import './App.css';
+import Guild from './routes/Guild';
 import { BotMeta } from './__generated__/BotMeta';
 
 const ME = gql`
     query BotMeta {
-        me {
+        bot {
             name
             id
             discriminator
         }
     }
 `;
+
 
 function App() {
     let { loading, error, data } = useQuery<BotMeta>(ME);
@@ -21,13 +24,41 @@ function App() {
     if (data === undefined) throw new Error("Undefined state");
 
     return (
-        <div >
-            whats poppin
+        <Router>
+            <div>
+                <nav>
+                    <ul>
+                        <li>
+                            <Link to="/">Home</Link>
+                        </li>
+                        <li>
+                            <input type="text" value={"708811110928744578"}/>
+                            <Link to={"/guild/708811110928744578"}>Go to guild</Link>
+                        </li>
+                    </ul>
+                </nav>
 
-            <pre>
-                {JSON.stringify(data, undefined, 4)}
-            </pre>
-        </div>
+                {/* A <Switch> looks through its children <Route>s and
+            renders the first one that matches the current URL. */}
+                <Switch>
+                    <Route path="/guild/:id">
+                        <Guild />
+                    </Route>
+                    <Route path="/" exact>
+                        <div>
+                            whats poppin
+
+                            <pre>
+                                {JSON.stringify(data, undefined, 4)}
+                            </pre>
+                        </div>
+                    </Route>
+                    <Route path="*">
+                        <pre>404</pre>
+                    </Route>
+                </Switch>
+            </div>
+        </Router>
     );
 }
 

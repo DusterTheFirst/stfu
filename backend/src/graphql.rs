@@ -1,12 +1,14 @@
 //! The definitions for the graphql api
 
 use anyhow::Context as _;
+use async_std::task;
 use juniper::{Context, FieldResult, RootNode};
 use rarity_permission_calculator::Calculator;
 use std::{
     collections::HashMap,
     convert::{TryFrom, TryInto},
     fmt::Debug,
+    mem::transmute,
     ops::Deref,
     sync::Arc,
 };
@@ -14,11 +16,14 @@ use twilight_cache_inmemory::{model::CachedGuild, model::CachedMember, InMemoryC
 use twilight_gateway::Shard;
 use twilight_http::Client;
 use twilight_model::{
-    channel::{self, GuildChannel},
+    channel::{self, permission_overwrite::PermissionOverwriteType, GuildChannel},
     id::{ChannelId, GuildId, UserId},
     user::CurrentUser,
     voice::VoiceState,
 };
+
+// FIXME: remove once https://github.com/rarity-rs/permission-calculator upgrades to v 0.2
+use rarity_permission_calculator::prelude as model_v1;
 
 use crate::consts::REQUIRED_PERMISSIONS;
 
@@ -243,9 +248,51 @@ impl VoiceChannel {
             .member(guild_id, bot_user.id)
             .context("The bot was unable to get information on itself in the guild")?;
 
-        let permissions = Calculator::new(guild_id, guild.owner_id, &roles)
-            .member(bot_user.id, bot_member.roles.as_slice())
-            .in_channel(self.kind, self.permission_overwrites.as_slice())?;
+        let permissions = Calculator::new(
+            model_v1::GuildId::from(guild_id.0),
+            model_v1::UserId::from(guild.owner_id.0),
+            &roles
+                .into_iter()
+                .map(|(role_id, permissions)| {
+                    (
+                        model_v1::RoleId::from(role_id.0),
+                        model_v1::Permissions::from_bits_truncate(permissions.bits()),
+                    )
+                })
+                .collect::<HashMap<_, _>>(),
+        )
+        .member(
+            model_v1::UserId::from(bot_user.id.0),
+            bot_member
+                .roles
+                .iter()
+                .map(|role| model_v1::RoleId::from(role.0))
+                .collect::<Vec<_>>()
+                .as_slice(),
+        )
+        .in_channel(
+            unsafe { transmute(self.kind) },
+            self.permission_overwrites
+                .iter()
+                .map(|perm| model_v1::PermissionOverwrite {
+                    allow: model_v1::Permissions::from_bits_truncate(perm.allow.bits()),
+                    deny: model_v1::Permissions::from_bits_truncate(perm.deny.bits()),
+                    kind: match perm.kind {
+                        PermissionOverwriteType::Member(user_id) => {
+                            model_v1::PermissionOverwriteType::Member(model_v1::UserId::from(
+                                user_id.0,
+                            ))
+                        }
+                        PermissionOverwriteType::Role(role_id) => {
+                            model_v1::PermissionOverwriteType::Role(model_v1::RoleId::from(
+                                role_id.0,
+                            ))
+                        }
+                    },
+                })
+                .collect::<Vec<_>>()
+                .as_slice(),
+        )?;
 
         Ok(permissions.contains(REQUIRED_PERMISSIONS))
     }
@@ -368,39 +415,42 @@ impl QueryRoot {
             .guild(GuildId(id.parse().context("Invalid guild id")?))
             .map(|g| g.into()))
     }
-    // fn shared_guilds(discord: &DiscordContext, user: String) -> FieldResult<Vec<Guild>> {
-    //     task::block_on(async {
-    //         let user = UserId(user.parse().context("Invalid user id")?);
+    fn shared_guilds(discord: &DiscordContext, user: String) -> FieldResult<Vec<Guild>> {
+        task::block_on(async {
+            let user = UserId(user.parse().context("Invalid user id")?);
 
-    //         for guild in discord.http.current_user_guilds().limit(100)?.await? {}
+            for guild in discord.http.current_user_guilds().limit(100)?.await? {
+                dbg!(guild);
+            }
 
-    //         Ok(vec![]) //FIXME:
-    //     })
+            Ok(vec![]) // FIXME:
+        })
 
-    //     // Ok(
-    //     //     .into_iter()
-    //     //     .filter(async |guild| {
-    //     //         discord
-    //     //             .http
-    //     //             .guild_members(guild.id)
-    //     //             .await
-    //     //             .context("Failed to get the guild members from a guild")?
-    //     //             .into_iter()
-    //     //             .any(|member| member.user.id == user)
-    //     //     })
-    //     //     .map(|guild| {
-    //     //         discord
-    //     //             .cache
-    //     //             .guild(guild.id)
-    //     //             .context("Guild not found in cache")?
-    //     //             .into()
-    //     //     })
-    //     //     .collect())
-    // }
+        // Ok(
+        //     .into_iter()
+        //     .filter(async |guild| {
+        //         discord
+        //             .http
+        //             .guild_members(guild.id)
+        //             .await
+        //             .context("Failed to get the guild members from a guild")?
+        //             .into_iter()
+        //             .any(|member| member.user.id == user)
+        //     })
+        //     .map(|guild| {
+        //         discord
+        //             .cache
+        //             .guild(guild.id)
+        //             .context("Guild not found in cache")?
+        //             .into()
+        //     })
+        //     .collect())
+    }
     /// Get information about the bot user
-    fn me(&self, discord: &DiscordContext) -> Option<Me> {
+    fn bot(&self, discord: &DiscordContext) -> Option<Me> {
         discord.cache.current_user().map(|user| user.into())
     }
+    // TODO: ME as in logged in user
 }
 
 #[derive(Copy, Clone, Debug)]
