@@ -33,7 +33,7 @@ function App() {
                         </li>
                         <li>
                             <input type="text" value={"708811110928744578"}/>
-                            <Link to={"/guild/708811110928744578"}>Go to guild</Link>
+                            <Link to={"/708811110928744578"}>Go to guild</Link>
                         </li>
                     </ul>
                 </nav>
@@ -41,8 +41,11 @@ function App() {
                 {/* A <Switch> looks through its children <Route>s and
             renders the first one that matches the current URL. */}
                 <Switch>
-                    <Route path="/guild/:id">
+                    <Route path="/:guild_id" exact>
                         <Guild />
+                    </Route>
+                    <Route path="/:guild_id/:channel_id" exact>
+                        {/* <Channel /> */}
                     </Route>
                     <Route path="/" exact>
                         <div>

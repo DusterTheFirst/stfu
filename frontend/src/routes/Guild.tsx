@@ -4,8 +4,8 @@ import { useParams } from "react-router-dom";
 import { GetGuild, GetGuildVariables } from "./__generated__/GetGuild";
 
 const GET_GUILD = gql`
-    query GetGuild($id: String!) {
-        guild(id: $id) {
+    query GetGuild($guild_id: String!) {
+        guild(id: $guild_id) {
             name,
             id,
             icon
@@ -41,8 +41,8 @@ const GET_GUILD = gql`
 `;
 
 export default function Guild() {
-    let { id } = useParams<{ id: string }>();
-    let { loading, error, data } = useQuery<GetGuild, GetGuildVariables>(GET_GUILD, { variables: { id } });
+    let { guild_id } = useParams<{ guild_id: string }>();
+    let { loading, error, data } = useQuery<GetGuild, GetGuildVariables>(GET_GUILD, { variables: { guild_id } });
 
     if (loading) return <div>Loading...</div>;
     if (error) return <div>Error :(<br /><pre>{JSON.stringify(error, undefined, 4)}</pre></div>
