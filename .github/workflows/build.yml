@@ -15,11 +15,10 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           components: clippy, rustfmt
-      - name: rust-cargo
-        uses: actions-rs/cargo@v1
-        with:
-          command: install
-          args: just
+
+      - name: Install Just
+        run: curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /bin
+        
       - name: rust-clippy-check
         uses: actions-rs/clippy-check@v1
         with:
