@@ -15,9 +15,11 @@ jobs:
       - name: Yarn Install
         working-directory: frontend
         run: yarn
+      - name: Build Backend Schema
+        run: just build-schema
       - name: Yarn Build
         working-directory: frontend
-        run: yarn build
+        run: just yarn build
         
       - name: Deploy 🚀
         uses: JamesIves/github-pages-deploy-action@3.6.2
