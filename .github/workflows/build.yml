@@ -25,7 +25,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: rust-rustfmt-check
-        uses: mbrobbel/rustfmt-check@0.3
+        uses: mbrobbel/rustfmt-check@0.3.0
         with:
           token:  ${{ secrets.GITHUB_TOKEN }}
 
