@@ -9,9 +9,13 @@ pub const REQUIRED_PERMISSIONS: Permissions = Permissions::from_bits_truncate(
         | Permissions::VIEW_CHANNEL.bits(),
 );
 
+/// Defaults exposed to the rest of the server, can probably be override with an environment variable
 pub mod defaults {
     use twilight_model::id::ApplicationId;
 
+    /// The client id of the oauth application
     pub const CLIENT_ID: ApplicationId = ApplicationId(746070136980766861);
+
+    /// The oauth redirect urls to choose from
     pub const REDIRECT_URLS: &[&str] = &["http://localhost:8000/oauth/done"];
 }

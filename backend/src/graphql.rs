@@ -324,8 +324,11 @@ impl Guild {
         self.unavailable
     }
     /// The snowflake id of the owner of the guild
-    fn owner_id(&self) -> String {
-        self.owner_id.to_string()
+    fn owner(&self, discord: &DiscordContext) -> Option<Member> {
+        discord
+            .cache
+            .member(self.id, self.owner_id)
+            .map(|member| member.into())
     }
     /// The icon of the guild
     fn icon(&self) -> Option<&String> {

@@ -3,26 +3,8 @@ import React from 'react';
 import { Link, Route, HashRouter as Router, Switch } from 'react-router-dom';
 import './App.css';
 import Guild from './routes/Guild';
-import { BotMeta } from './__generated__/BotMeta';
-
-const ME = gql`
-    query BotMeta {
-        bot {
-            name
-            id
-            discriminator
-        }
-    }
-`;
-
 
 function App() {
-    let { loading, error, data } = useQuery<BotMeta>(ME);
-
-    if (loading) return <div>Loading...</div>;
-    if (error) return <div>Error :(<br /><pre>{JSON.stringify(error, undefined, 4)}</pre></div>
-    if (data === undefined) throw new Error("Undefined state");
-
     return (
         <Router>
             <div>
@@ -30,10 +12,6 @@ function App() {
                     <ul>
                         <li>
                             <Link to="/">Home</Link>
-                        </li>
-                        <li>
-                            <input type="text" value={"708811110928744578"}/>
-                            <Link to={"/708811110928744578"}>Go to guild</Link>
                         </li>
                     </ul>
                 </nav>
@@ -51,9 +29,10 @@ function App() {
                         <div>
                             whats poppin
 
-                            <pre>
-                                {JSON.stringify(data, undefined, 4)}
-                            </pre>
+                            <div>
+                                <input type="text" value={"708811110928744578"} />
+                                <Link to={"/708811110928744578"}>Go to guild</Link>
+                            </div>
                         </div>
                     </Route>
                     <Route path="*">
