@@ -18,8 +18,7 @@ jobs:
 
       - name: Install Just
         run:
-          curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | sudo bash -s -- --to ./bin
-          && export PATH=$PATH":./bin"
+          curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | sudo bash -s
         
       - name: rust-clippy-check
         uses: actions-rs/clippy-check@v1
