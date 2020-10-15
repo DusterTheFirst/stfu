@@ -1,7 +1,5 @@
-import { gql, useQuery } from '@apollo/client';
 import React from 'react';
 import { Link, Route, HashRouter as Router, Switch } from 'react-router-dom';
-import './App.css';
 import Guild from './routes/Guild';
 
 function App() {

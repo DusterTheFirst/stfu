@@ -13,18 +13,17 @@
 
 use anyhow::Context;
 use async_std::{stream::StreamExt, task};
-use consts::defaults;
 use content::Html;
 use graphql::{create_schema, DiscordContext, Schema};
 use juniper_rocket::{graphiql_source, GraphQLRequest, GraphQLResponse};
-use log::{debug, error, info, trace, warn};
+use log::warn;
 use rocket::{config::Environment, response::content, routes, Config, State};
 use rocket_cors::{Cors, CorsOptions};
 use std::env;
 use twilight_cache_inmemory::InMemoryCache;
 use twilight_gateway::shard::ShardBuilder;
 use twilight_http::Client as HttpClient;
-use twilight_model::{gateway::Intents, id::ApplicationId};
+use twilight_model::gateway::Intents;
 
 pub mod consts;
 pub mod graphql;
@@ -57,21 +56,23 @@ fn graphiql() -> Html<String> {
 }
 
 #[rocket::get("/graphql?<request>")]
+#[allow(clippy::needless_pass_by_value)]
 fn get_graphql_handler(
     context: State<DiscordContext>,
-    request: GraphQLRequest,
     schema: State<Schema>,
+    request: GraphQLRequest,
 ) -> GraphQLResponse {
-    request.execute(&schema, context.inner())
+    request.execute(&schema, &context)
 }
 
 #[rocket::post("/graphql", data = "<request>")]
+#[allow(clippy::needless_pass_by_value)]
 fn post_graphql_handler(
     context: State<DiscordContext>,
-    request: GraphQLRequest,
     schema: State<Schema>,
+    request: GraphQLRequest,
 ) -> GraphQLResponse {
-    request.execute(&schema, context.inner())
+    request.execute(&schema, &context)
 }
 
 #[cfg(not(feature = "generate_schema"))]
@@ -155,7 +156,7 @@ async fn main() -> anyhow::Result<()> {
     .attach(
         Cors::from_options(&CorsOptions {
             // allow_credentials: true,
-            ..Default::default()
+            ..CorsOptions::default()
         })
         .context("Failed to setup cors")?,
     )

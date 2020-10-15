@@ -14,7 +14,7 @@ pub mod defaults {
     use twilight_model::id::ApplicationId;
 
     /// The client id of the oauth application
-    pub const CLIENT_ID: ApplicationId = ApplicationId(746070136980766861);
+    pub const CLIENT_ID: ApplicationId = ApplicationId(746_070_136_980_766_861);
 
     /// The oauth redirect urls to choose from
     pub const REDIRECT_URLS: &[&str] = &["http://localhost:8000/oauth/done"];

@@ -1,6 +1,6 @@
-import { gql, useApolloClient, useQuery } from "@apollo/client";
+import { gql, useQuery } from "@apollo/client";
 import React from "react";
-import { Link, useHistory, useLocation, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { GetGuild, GetGuildVariables } from "./__generated__/GetGuild";
 
 const GET_GUILD = gql`

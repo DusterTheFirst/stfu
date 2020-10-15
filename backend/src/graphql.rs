@@ -197,24 +197,18 @@ impl VoiceChannel {
         self.id.to_string()
     }
     fn user_limit(&self) -> FieldResult<Option<i32>> {
-        Ok(self
-            .user_limit
-            .map(|limit| i32::try_from(limit))
-            .transpose()?)
+        Ok(self.user_limit.map(i32::try_from).transpose()?)
     }
     fn position(&self) -> FieldResult<i32> {
         Ok(self.position.try_into()?)
     }
     fn category(&self, discord: &DiscordContext) -> Option<CategoryChannel> {
-        self.parent_id
-            .map(|parent_id| {
-                discord
-                    .cache
-                    .guild_channel(parent_id)
-                    .map(|parent| parent.try_into().ok())
-                    .flatten()
-            })
-            .flatten()
+        self.parent_id.and_then(|parent_id| {
+            discord
+                .cache
+                .guild_channel(parent_id)
+                .and_then(|parent| parent.try_into().ok())
+        })
     }
 
     /// If the bot can operate on the guild
@@ -349,8 +343,7 @@ impl Guild {
                         discord
                             .cache
                             .guild_channel(id)
-                            .map(|c| c.try_into().ok())
-                            .flatten()
+                            .and_then(|c| c.try_into().ok())
                     })
                     .collect::<Vec<_>>()
             })
@@ -365,8 +358,7 @@ impl Guild {
         Ok(discord
             .cache
             .guild_channel(ChannelId(id.parse().context("Invalid channel id")?))
-            .map(|c| c.try_into().ok())
-            .flatten())
+            .and_then(|c| c.try_into().ok()))
     }
     fn members(&self, discord: &DiscordContext) -> Vec<Member> {
         discord
@@ -479,6 +471,7 @@ impl MutationRoot {
 pub type Schema = RootNode<'static, QueryRoot, MutationRoot>;
 
 /// Create the GraphQL schema described in this file
+#[must_use = "You need to do something with the schema you have created"]
 pub fn create_schema() -> Schema {
     Schema::new(QueryRoot, MutationRoot)
 }
