@@ -162,6 +162,9 @@ impl VoiceChannelState {
     fn self_mute(&self) -> bool {
         self.self_mute
     }
+    fn channel_id(&self) -> Option<String> {
+        self.channel_id.map(|id| id.to_string())
+    }
     fn member(&self, discord: &DiscordContext) -> FieldResult<Member> {
         Ok(discord
             .cache

@@ -1,6 +1,6 @@
 build-schema:
 	cd backend && cargo run --features=generate_schema
-	just yarn codegen
+	just yarn-run codegen
 
 clean-schema:
 	find . -type d -name __generated__ -prune -exec echo {} \;
@@ -14,8 +14,10 @@ backend-build:
 backend:
 	cargo watch -x run -w backend
 
-frontend: (yarn "start")
+frontend: (yarn-run "start")
 
-yarn action:
+yarn-run action:
 	cd frontend && yarn run {{action}}
 
+yarn:
+	cd frontend && yarn

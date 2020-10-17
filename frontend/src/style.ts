@@ -1,5 +1,6 @@
 import { createGlobalStyle } from "styled-components";
 
+/** The global style for the application */
 export const GlobalStyle = createGlobalStyle`
     body {
         margin: 0;
@@ -13,5 +14,20 @@ export const GlobalStyle = createGlobalStyle`
     code {
         font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
             monospace;
+    }
+
+    table {
+        border: 2px solid black;
+        width: 100%;
+
+        td {
+            border: 2px solid black;
+            text-align: center;
+        }
+        th {
+            background: black;
+            color: white;
+            text-align: center;
+        }
     }
 `;

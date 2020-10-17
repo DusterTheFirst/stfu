@@ -1,30 +1,26 @@
-import React from 'react';
-import { Link, Route, HashRouter as Router, Switch } from 'react-router-dom';
-import Guild from './routes/Guild';
+import React from "react";
+import { HashRouter as Router, Link, Route, Switch } from "react-router-dom";
+import Channel from "./routes/Channel";
+import Guild from "./routes/Guild";
 
+/** The main entry point for the app */
 function App() {
     return (
         <Router>
             <div>
-                <nav>
-                    <ul>
-                        <li>
-                            <Link to="/">Home</Link>
-                        </li>
-                    </ul>
-                </nav>
-
                 {/* A <Switch> looks through its children <Route>s and
             renders the first one that matches the current URL. */}
                 <Switch>
-                    <Route path="/:guild_id" exact>
+                    <Route path="/:guild_id" exact={true}>
                         <Guild />
                     </Route>
-                    <Route path="/:guild_id/:channel_id" exact>
-                        {/* <Channel /> */}
+                    <Route path="/:guild_id/:channel_id" exact={true}>
+                        <Channel />
                     </Route>
-                    <Route path="/" exact>
+                    <Route path="/" exact={true}>
                         <div>
+                            <div>/ Home</div>
+
                             whats poppin
 
                             <div>

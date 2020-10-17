@@ -1,8 +1,13 @@
 import { gql, useQuery } from "@apollo/client";
-import React from "react";
+import React, { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
-import { GetGuild, GetGuildVariables } from "./__generated__/GetGuild";
+import ErrorScreen from "../components/Error";
+import { LoadingIcon, LoadingScreen } from "../components/Loading";
+import {
+    GetGuild, GetGuildVariables, GetGuild_guild, GetGuild_guild_voiceChannels as VoiceChannel, GetGuild_guild_voiceChannels_category as ChannelCategory
+} from "./__generated__/GetGuild";
 
+/** The graphql query to get information about the specific guild */
 const GET_GUILD = gql`
     query GetGuild($guild_id: String!) {
         guild(id: $guild_id) {
@@ -32,6 +37,7 @@ const GET_GUILD = gql`
                 states {
                     deaf
                     id
+                    channelId
                     member {
                         id
                         name
@@ -47,28 +53,93 @@ const GET_GUILD = gql`
     }
 `;
 
+/** The parameters for the guild url */
+interface IParams {
+    /** The guild id to view */
+    guild_id: string;
+}
+
+/** The page for guild information */
 export default function Guild() {
-    let { guild_id } = useParams<{ guild_id: string }>();
-    let { loading, error, data, refetch } = useQuery<GetGuild, GetGuildVariables>(GET_GUILD, { variables: { guild_id } });
+    const { guild_id } = useParams<IParams>();
+    const { loading, error, data, refetch } = useQuery<GetGuild, GetGuildVariables>(GET_GUILD, { variables: { guild_id }, notifyOnNetworkStatusChange: true });
+    const refetch_no_await = () => { refetch().catch((e) => console.error(e)); };
 
-    if (loading) return <div>Loading...</div>;
-    if (error) return <div>Error :(<br /><pre>{JSON.stringify(error, undefined, 4)}</pre></div>
-
-    // Safety: I can guarantee, at this state that data is not null since it is only allowed to be null if there is an error, which would be caught
-    let guild = data!.guild;
-
-    if (guild === null) {
+    if (loading && data === undefined) {
         return (
-            <div>
-                <h1>The guild with id {guild_id} does not exist or is not available to the bot</h1>
-            </div>
-        )
+            <LoadingScreen refetch={refetch_no_await} />
+        );
+    } else if (error !== undefined) {
+        return (
+            <ErrorScreen error={error} refetch={refetch_no_await} />
+        );
+    } else {
+        // Safety: I can guarantee, at this state that data is not null since it is only allowed to be null if there is an error, which would be caught
+        // tslint:disable-next-line:no-non-null-assertion
+        const guild = data!.guild;
+
+        if (guild === null) {
+            return (
+                <div>
+                    <h1>The guild with id {guild_id} does not exist or is not available to the bot</h1>
+                </div>
+            );
+        }
+
+        return (
+            <>
+                {loading ? <LoadingIcon/> : undefined}
+                <GuildInfo guild={guild} refetch={refetch_no_await} />
+                <pre>
+                    {JSON.stringify(data, undefined, 4)}
+                </pre>
+            </>
+        );
     }
+}
+
+/** The props for the GuildInfo component */
+interface IGuildInfoProps {
+    /** The guild to view */
+    guild: GetGuild_guild;
+    /** The refresh function to query a refresh */
+    refetch(): void;
+}
+
+/** The map for the voice chats */
+type VCMap = Map<ChannelCategory | null, VoiceChannel[]>;
+
+/** The view into the information of the guild */
+function GuildInfo({ guild, refetch }: IGuildInfoProps) {
+    const voice_channels: Array<[ChannelCategory | null, VoiceChannel[]]> = useMemo(() =>
+        Array.from(
+            guild.voiceChannels
+                .reduce<VCMap>((map, x) => {
+                    let arr = map.get(x.category);
+                    if (arr === undefined) {
+                        arr = [];
+                    }
+
+                    arr.push(x);
+
+                    map.set(x.category, arr);
+
+                    return map;
+                }, new Map())
+                .entries()
+        )
+            .sort(([a], [b]) =>
+                (a?.position === undefined ? -1 : a.position) - (b?.position === undefined ? -1 : b?.position)
+            ).map(([cat, vcs]) =>
+                [cat, vcs.sort((a, b) => a.position - b.position)]
+            ),
+        [guild.voiceChannels]
+    );
 
     return (
         <div>
-            <Link to="../">{"<"} Back</Link>
-            <button onClick={() => refetch()}>Refresh</button>
+            <div>/ <Link to="/">Home</Link> / {guild.name}</div>
+            <button onClick={refetch}>Refresh</button>
             <table>
                 <thead>
                     <tr>
@@ -87,30 +158,51 @@ export default function Guild() {
                     </tr>
                     <tr>
                         <td>Guild owner:</td>
-                        <td style={{ color: `#${guild.owner?.color?.toString(16) || "000000"}`, fontWeight: "bold" }}>{guild.owner === null ? "Could not be found" : `${guild.owner.nick || guild.owner.name}#${guild.owner.discriminator}`}</td>
+                        <td style={{ color: `#${guild.owner?.color === undefined || guild.owner.color === null ? "000000" : guild.owner.color.toString(16)}`, fontWeight: "bold" }}>{guild.owner === null ? "Could not be found" : `${guild.owner.nick === null ? guild.owner.name : guild.owner.nick}#${guild.owner.discriminator}`}</td>
                     </tr>
                     <tr>
-                        <td>Voice channels:</td>
+                        <td>Voice categories:</td>
                         <td>
                             <table>
                                 <thead>
                                     <tr>
-                                        <th>Name</th>
-                                        <th>Id</th>
-                                        <th>Can operate</th>
-                                        <th>User Limit</th>
-                                        <th>Users</th>
-
+                                        <th>Name:</th>
+                                        <th>Position:</th>
+                                        <th>Voice channels:</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {guild.voiceChannels.map((vc, i) => (
+                                    {voice_channels.map(([category, vcs], i) => (
                                         <tr key={i}>
-                                            <td>{vc.name}</td>
-                                            <td>{vc.id}</td>
-                                            <td>{vc.canOperate ? "true" : "false"}</td>
-                                            <td>{vc.userLimit}</td>
-                                            <td>{vc.states.length}</td>
+                                            <td>{category?.name === undefined ? "No Category" : category.name}</td>
+                                            <td>{category?.position === undefined ? -1 : category.position}</td>
+                                            <td>
+                                                <table>
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Name</th>
+                                                            <th>Position</th>
+                                                            <th>Can operate</th>
+                                                            <th>User Limit</th>
+                                                            <th>User Count</th>
+                                                            <th>Users</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {vcs.map((vc, j) => (
+                                                            <tr key={j}>
+                                                                <td><Link to={`/${guild.id}/${vc.id}`}>{vc.name}</Link></td>
+                                                                <td>{vc.position}</td>
+                                                                <td>{vc.canOperate ? "true" : "false"}</td>
+                                                                <td>{vc.userLimit}</td>
+                                                                <td>{vc.states.length}</td>
+                                                                <td>{vc.states.map(s => s.channelId).join(", ")}</td>
+                                                            </tr>
+                                                        ))}
+
+                                                    </tbody>
+                                                </table>
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -118,15 +210,11 @@ export default function Guild() {
                         </td>
                     </tr>
                     <tr>
-                        <td>Guild name:</td>
-                        <td>{guild.name}</td>
+                        <td>Guild icon:</td>
+                        <td>{guild.icon}</td>
                     </tr>
                 </tbody>
             </table>
-
-            <pre>
-                {JSON.stringify(data, undefined, 4)}
-            </pre>
         </div >
     );
 }

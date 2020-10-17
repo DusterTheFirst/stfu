@@ -1,14 +1,16 @@
-import React from 'react';
-import ReactDOM from 'react-dom';
-import App from './App';
-import * as serviceWorker from './serviceWorker';
-import { GlobalStyle } from './style';
-import { ApolloClient, ApolloProvider, InMemoryCache } from '@apollo/client';
+import { ApolloClient, ApolloProvider, InMemoryCache } from "@apollo/client";
+import React from "react";
+import ReactDOM from "react-dom";
+import App from "./App";
+import { BACKEND_GRAPHQL_URL } from "./constants";
+import * as serviceWorker from "./serviceWorker";
+import { GlobalStyle } from "./style";
 
+/** The client to use for apollo */
 const CLIENT = new ApolloClient({
+    cache: new InMemoryCache(),
     name: "stfu",
-    uri: "http://localhost:8000/graphql",
-    cache: new InMemoryCache()
+    uri: BACKEND_GRAPHQL_URL
 });
 
 ReactDOM.render(
@@ -18,9 +20,8 @@ ReactDOM.render(
             <App />
         </ApolloProvider>
     </React.StrictMode>,
-    document.getElementById('root')
+    document.getElementById("root")
 );
-
 
 // If you want your app to work offline and load faster, you can change
 // unregister() to register() below. Note this comes with some pitfalls.
