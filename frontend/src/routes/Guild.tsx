@@ -3,6 +3,7 @@ import React, { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import ErrorScreen from "../components/Error";
 import { LoadingIcon, LoadingScreen } from "../components/Loading";
+import { getGuildIcon } from "../utils";
 import {
     GetGuild, GetGuildVariables, GetGuild_guild, GetGuild_guild_voiceChannels as VoiceChannel, GetGuild_guild_voiceChannels_category as ChannelCategory
 } from "./__generated__/GetGuild";
@@ -44,6 +45,7 @@ const GET_GUILD = gql`
                         avatar
                         color
                         nick
+                        discriminator
                     }
                     mute
                 }
@@ -88,7 +90,7 @@ export default function Guild() {
 
         return (
             <>
-                {loading ? <LoadingIcon/> : undefined}
+                {loading ? <LoadingIcon /> : undefined}
                 <GuildInfo guild={guild} refetch={refetch_no_await} />
                 <pre>
                     {JSON.stringify(data, undefined, 4)}
@@ -158,7 +160,7 @@ function GuildInfo({ guild, refetch }: IGuildInfoProps) {
                     </tr>
                     <tr>
                         <td>Guild owner:</td>
-                        <td style={{ color: `#${guild.owner?.color === undefined || guild.owner.color === null ? "000000" : guild.owner.color.toString(16)}`, fontWeight: "bold" }}>{guild.owner === null ? "Could not be found" : `${guild.owner.nick === null ? guild.owner.name : guild.owner.nick}#${guild.owner.discriminator}`}</td>
+                        <td style={{ color: `#${guild.owner.color === null ? "000000" : guild.owner.color.toString(16)}`, fontWeight: "bold" }}>{guild.owner.nick === null ? guild.owner.name : guild.owner.nick}#{guild.owner.discriminator}</td>
                     </tr>
                     <tr>
                         <td>Voice categories:</td>
@@ -193,10 +195,10 @@ function GuildInfo({ guild, refetch }: IGuildInfoProps) {
                                                             <tr key={j}>
                                                                 <td><Link to={`/${guild.id}/${vc.id}`}>{vc.name}</Link></td>
                                                                 <td>{vc.position}</td>
-                                                                <td>{vc.canOperate ? "true" : "false"}</td>
+                                                                <td>{vc.canOperate.toString()}</td>
                                                                 <td>{vc.userLimit}</td>
                                                                 <td>{vc.states.length}</td>
-                                                                <td>{vc.states.map(s => s.channelId).join(", ")}</td>
+                                                                <td>{vc.states.map(s => `${s.member.name}#${s.member.discriminator}`).join(", ")}</td>
                                                             </tr>
                                                         ))}
 
@@ -211,7 +213,7 @@ function GuildInfo({ guild, refetch }: IGuildInfoProps) {
                     </tr>
                     <tr>
                         <td>Guild icon:</td>
-                        <td>{guild.icon}</td>
+                        <td><img src={getGuildIcon(guild)} alt="Guild icon"/></td>
                     </tr>
                 </tbody>
             </table>

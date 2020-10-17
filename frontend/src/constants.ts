@@ -7,3 +7,6 @@ export const IS_HTTPS = IS_PROD;
 export const BACKEND_DOMAIN = IS_PROD ? "stfu-backend.dusterthefirst.com" : "localhost:8000";
 /** The backend graphql url */
 export const BACKEND_GRAPHQL_URL = `http${IS_HTTPS ? "s" : ""}://${BACKEND_DOMAIN}/graphql`;
+
+/** The CDN for accessing images or content from discord */
+export const DISCORD_CDN = "https://cdn.discordapp.com/";

@@ -321,11 +321,12 @@ impl Guild {
         self.unavailable
     }
     /// The snowflake id of the owner of the guild
-    fn owner(&self, discord: &DiscordContext) -> Option<Member> {
-        discord
+    fn owner(&self, discord: &DiscordContext) -> FieldResult<Member> {
+        Ok(discord
             .cache
             .member(self.id, self.owner_id)
-            .map(|member| member.into())
+            .context("The guild owner was not found in the cache")?
+            .into())
     }
     /// The icon of the guild
     fn icon(&self) -> Option<&String> {
@@ -414,10 +415,11 @@ impl QueryRoot {
             .map(|g| g.into()))
     }
     fn shared_guilds(discord: &DiscordContext, user: String) -> FieldResult<Vec<Guild>> {
-        task::block_on(async {
-            let user = UserId(user.parse().context("Invalid user id")?);
+        let user = UserId(user.parse().context("Invalid user id")?);
 
+        task::block_on(async move {
             for guild in discord.http.current_user_guilds().limit(100)?.await? {
+                discord.http.guild_members(guild.id).await?;
                 dbg!(guild);
             }
 
@@ -445,8 +447,12 @@ impl QueryRoot {
         //     .collect())
     }
     /// Get information about the bot user
-    fn bot(&self, discord: &DiscordContext) -> Option<Me> {
-        discord.cache.current_user().map(|user| user.into())
+    fn bot(&self, discord: &DiscordContext) -> FieldResult<Me> {
+        Ok(discord
+            .cache
+            .current_user()
+            .context("Unable to get information on the bot user from the cache")?
+            .into())
     }
     // TODO: ME as in logged in user
 }

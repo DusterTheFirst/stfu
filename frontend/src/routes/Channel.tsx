@@ -3,6 +3,7 @@ import React from "react";
 import { Link, useParams } from "react-router-dom";
 import ErrorScreen from "../components/Error";
 import { LoadingIcon, LoadingScreen } from "../components/Loading";
+import { getAvatar } from "../utils";
 import { GetChannel, GetChannelVariables, GetChannel_guild, GetChannel_guild_voiceChannel } from "./__generated__/GetChannel";
 
 /** The graphql query to get the specific channel */
@@ -57,7 +58,17 @@ interface IParams {
 /** The voice channel view */
 export default function Channel() {
     const { guild_id, channel_id } = useParams<IParams>();
-    const { loading, error, data, refetch } = useQuery<GetChannel, GetChannelVariables>(GET_CHANNEL, { variables: { guild_id, channel_id }, notifyOnNetworkStatusChange: true });
+    const { loading, error, data, refetch } = useQuery<GetChannel, GetChannelVariables>(
+        GET_CHANNEL,
+        {
+            notifyOnNetworkStatusChange: true,
+            pollInterval: 15000,
+            variables: {
+                channel_id,
+                guild_id,
+            },
+        }
+    );
     const refetch_no_await = () => { refetch().catch((e) => console.error(e)); };
 
     if (loading && data === undefined) {
@@ -135,10 +146,38 @@ function ChannelInfo({ guild, channel, refetch }: IChannelInfoProps) {
                     <tr>
                         <td>{channel.name}</td>
                         <td>{channel.position}</td>
-                        <td>{channel.canOperate ? "true" : "false"}</td>
+                        <td>{channel.canOperate.toString()}</td>
                         <td>{channel.userLimit}</td>
                         <td>{channel.states.length}</td>
-                        <td>{channel.states.map(s => s.channelId).join(", ")}</td>
+                        <td>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Avatar</th>
+                                        <th>Id</th>
+                                        <th>Server Mute</th>
+                                        <th>Server Deaf</th>
+                                        <th>Self Mute</th>
+                                        <th>Self Deaf</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {channel.states.map((s, i) => (
+                                        <tr key={i}>
+                                            <td style={{ color: `#${s.member.color === null ? "000000" : s.member.color.toString(16)}`, fontWeight: "bold" }}>{s.member.name}#{s.member.discriminator}{s.member.nick === null ? undefined : ` (${s.member.nick})`}</td>
+                                            {/* FIXME: deal with no avatar */}
+                                            <td><img src={`${getAvatar(s.member)}?size=64`} alt={`${s.member.name}'s avatar`}/></td>
+                                            <td>{s.member.id}</td>
+                                            <td>{s.mute.toString()}</td>
+                                            <td>{s.deaf.toString()}</td>
+                                            <td>{s.selfMute.toString()}</td>
+                                            <td>{s.selfDeaf.toString()}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </td>
                     </tr>
                 </tbody>
             </table>
