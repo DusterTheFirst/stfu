@@ -1866,6 +1866,7 @@ dependencies = [
  "anyhow",
  "async-std",
  "ctrlc",
+ "futures",
  "juniper",
  "juniper_rocket",
  "log 0.4.11",

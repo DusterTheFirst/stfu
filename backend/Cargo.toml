@@ -8,7 +8,8 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0.33"
-async-std = { version = "1.6.5", features = ["tokio02", "attributes"] }
+async-std = { version = "1.6.5", features = ["tokio02", "attributes", "unstable"] }
+futures = "0.3.6"
 ctrlc = "3.1.7"
 juniper = "0.14.2"
 juniper_rocket = "0.5.2"

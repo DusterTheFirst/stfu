@@ -1,10 +1,13 @@
-import { gql, useQuery } from "@apollo/client";
+import { FetchResult, gql, useMutation, useQuery } from "@apollo/client";
 import React from "react";
 import { Link, useParams } from "react-router-dom";
 import ErrorScreen from "../components/Error";
+import LazyAnimateImage from "../components/LazyAnimateImage";
 import { LoadingIcon, LoadingScreen } from "../components/Loading";
 import { getAvatar } from "../utils";
 import { GetChannel, GetChannelVariables, GetChannel_guild, GetChannel_guild_voiceChannel } from "./__generated__/GetChannel";
+import { MuteAll, MuteAllVariables } from "./__generated__/MuteAll";
+import { UnmuteAll, UnmuteAllVariables } from "./__generated__/UnmuteAll";
 
 /** The graphql query to get the specific channel */
 const GET_CHANNEL = gql`
@@ -47,6 +50,20 @@ const GET_CHANNEL = gql`
     }
 `;
 
+/** The graphql query to mute all in a channel */
+const MUTE_ALL = gql`
+    mutation MuteAll($channel_id: String!, $guild_id: String!) {
+        mute(channelId: $channel_id, guildId: $guild_id)
+    }
+`;
+
+/** The graphql query to unmute all in a channel */
+const UNMUTE_ALL = gql`
+    mutation UnmuteAll($channel_id: String!, $guild_id: String!) {
+        unmute(channelId: $channel_id, guildId: $guild_id)
+    }
+`;
+
 /** The parameters for the channel */
 interface IParams {
     /** The parent guild's id */
@@ -69,6 +86,21 @@ export default function Channel() {
             },
         }
     );
+    const [muteAll] = useMutation<MuteAll, MuteAllVariables>(MUTE_ALL, {
+        notifyOnNetworkStatusChange: true,
+        variables: {
+            channel_id,
+            guild_id
+        }
+    });
+    const [unmuteAll] = useMutation<UnmuteAll, UnmuteAllVariables>(UNMUTE_ALL, {
+        notifyOnNetworkStatusChange: true,
+        variables: {
+            channel_id,
+            guild_id
+        }
+    });
+
     const refetch_no_await = () => { refetch().catch((e) => console.error(e)); };
 
     if (loading && data === undefined) {
@@ -105,7 +137,7 @@ export default function Channel() {
         return (
             <>
                 {loading ? <LoadingIcon /> : undefined}
-                <ChannelInfo guild={guild} channel={channel} refetch={refetch_no_await} />
+                <ChannelInfo guild={guild} channel={channel} refetch={refetch_no_await} muteAll={muteAll} unmuteAll={unmuteAll} />
                 <pre>
                     {JSON.stringify(data, undefined, 4)}
                 </pre>
@@ -122,15 +154,23 @@ interface IChannelInfoProps {
     channel: GetChannel_guild_voiceChannel;
     /** The refresh function to query a refresh */
     refetch(): void;
+    /** The mute all function to unmute all */
+    muteAll(): Promise<FetchResult<MuteAll>>;
+    /** The unmute all function to unmute all */
+    unmuteAll(): Promise<FetchResult<UnmuteAll>>;
 }
 
 /** The information on a specific channel */
-function ChannelInfo({ guild, channel, refetch }: IChannelInfoProps) {
+function ChannelInfo({ guild, channel, refetch, muteAll, unmuteAll }: IChannelInfoProps) {
     return (
         <div>
             <div>/ <Link to="/">Home</Link> / <Link to={`/${guild.id}`}>{guild.name}</Link> / {channel.name} </div>
             <button onClick={refetch}>Refresh</button>
 
+            <div>
+                <button onClick={muteAll.bind(muteAll)}>Mute</button>
+                <button onClick={unmuteAll.bind(unmuteAll)}>Unmute</button>
+            </div>
             <table>
                 <thead>
                     <tr>
@@ -163,18 +203,21 @@ function ChannelInfo({ guild, channel, refetch }: IChannelInfoProps) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {channel.states.map((s, i) => (
-                                        <tr key={i}>
-                                            <td style={{ color: `#${s.member.color === null ? "000000" : s.member.color.toString(16)}`, fontWeight: "bold" }}>{s.member.name}#{s.member.discriminator}{s.member.nick === null ? undefined : ` (${s.member.nick})`}</td>
-                                            {/* FIXME: deal with no avatar */}
-                                            <td><img src={`${getAvatar(s.member)}?size=64`} alt={`${s.member.name}'s avatar`}/></td>
-                                            <td>{s.member.id}</td>
-                                            <td>{s.mute.toString()}</td>
-                                            <td>{s.deaf.toString()}</td>
-                                            <td>{s.selfMute.toString()}</td>
-                                            <td>{s.selfDeaf.toString()}</td>
-                                        </tr>
-                                    ))}
+                                    {channel.states.map((s, i) => {
+                                        const source = (hover: boolean) => `${getAvatar(s.member, hover)}?size=64`;
+
+                                        return (
+                                            <tr key={i}>
+                                                <td style={{ color: `#${s.member.color === null ? "000000" : s.member.color.toString(16)}`, fontWeight: "bold" }}>{s.member.name}#{s.member.discriminator}{s.member.nick === null ? undefined : ` (${s.member.nick})`}</td>
+                                                <td><LazyAnimateImage source={source} alt={`${s.member.name}'s avatar`} /></td>
+                                                <td>{s.member.id}</td>
+                                                <td>{s.mute.toString()}</td>
+                                                <td>{s.deaf.toString()}</td>
+                                                <td>{s.selfMute.toString()}</td>
+                                                <td>{s.selfDeaf.toString()}</td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </td>

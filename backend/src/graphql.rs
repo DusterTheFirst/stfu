@@ -2,6 +2,7 @@
 
 use anyhow::Context as _;
 use async_std::task;
+use futures::future::join_all;
 use juniper::{Context, FieldResult, RootNode};
 use rarity_permission_calculator::Calculator;
 use std::{
@@ -10,6 +11,7 @@ use std::{
     fmt::Debug,
     mem::transmute,
     ops::Deref,
+    sync::mpsc,
     sync::Arc,
 };
 use twilight_cache_inmemory::{model::CachedGuild, model::CachedMember, InMemoryCache};
@@ -463,8 +465,27 @@ pub struct MutationRoot;
 
 #[juniper::object(Context = DiscordContext)]
 impl MutationRoot {
-    fn void() -> String {
-        "ok".into()
+    fn mute(
+        guild_id: String,
+        channel_id: String,
+        discord: &DiscordContext,
+    ) -> FieldResult<Vec<String>> {
+        let guild_id = GuildId(guild_id.parse().context("Invalid guild id")?);
+        let channel_id = ChannelId(channel_id.parse().context("Invalid channel id")?);
+
+        mass_update_voice_state(discord, channel_id, guild_id, true)
+            .map(|ids| ids.into_iter().map(|id| id.to_string()).collect())
+    }
+    fn unmute(
+        guild_id: String,
+        channel_id: String,
+        discord: &DiscordContext,
+    ) -> FieldResult<Vec<String>> {
+        let guild_id = GuildId(guild_id.parse().context("Invalid guild id")?);
+        let channel_id = ChannelId(channel_id.parse().context("Invalid channel id")?);
+
+        mass_update_voice_state(discord, channel_id, guild_id, false)
+            .map(|ids| ids.into_iter().map(|id| id.to_string()).collect())
     }
     // fn create_human(new_human: NewHuman) -> FieldResult<Human> {
     //     Ok(Human {
@@ -474,6 +495,45 @@ impl MutationRoot {
     //         home_planet: new_human.home_planet,
     //     })
     // }
+}
+
+fn mass_update_voice_state(
+    discord: &DiscordContext,
+    channel_id: ChannelId,
+    guild_id: GuildId,
+    mute: bool,
+) -> FieldResult<Vec<UserId>> {
+    if let Some(states) = discord.cache.voice_channel_states(channel_id) {
+        let (send_muted, recieve_muted) = mpsc::channel();
+
+        for chunk in states.chunks(10) {
+            task::block_on(
+                join_all(
+                    chunk.into_iter()
+                    .map(|state| {
+                        let send_muted = send_muted.clone();
+
+                        async move {
+                            if state.mute != mute {
+                                if let Ok(_) = discord
+                                    .http
+                                    .update_guild_member(guild_id, state.user_id)
+                                    .mute(mute)
+                                    .await
+                                {
+                                    send_muted.send(state.user_id).ok();
+                                }
+                            }
+                        }
+                    }
+                )
+            ));
+        }
+
+        Ok(recieve_muted.try_iter().collect())
+    } else {
+        Ok(Vec::new())
+    }
 }
 
 /// The graphql schema described in this file
