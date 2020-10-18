@@ -507,27 +507,22 @@ fn mass_update_voice_state(
         let (send_muted, recieve_muted) = mpsc::channel();
 
         for chunk in states.chunks(10) {
-            task::block_on(
-                join_all(
-                    chunk.into_iter()
-                    .map(|state| {
-                        let send_muted = send_muted.clone();
+            task::block_on(join_all(chunk.into_iter().map(|state| {
+                let send_muted = send_muted.clone();
 
-                        async move {
-                            if state.mute != mute {
-                                if let Ok(_) = discord
-                                    .http
-                                    .update_guild_member(guild_id, state.user_id)
-                                    .mute(mute)
-                                    .await
-                                {
-                                    send_muted.send(state.user_id).ok();
-                                }
-                            }
+                async move {
+                    if state.mute != mute {
+                        if let Ok(_) = discord
+                            .http
+                            .update_guild_member(guild_id, state.user_id)
+                            .mute(mute)
+                            .await
+                        {
+                            send_muted.send(state.user_id).ok();
                         }
                     }
-                )
-            ));
+                }
+            })));
         }
 
         Ok(recieve_muted.try_iter().collect())
