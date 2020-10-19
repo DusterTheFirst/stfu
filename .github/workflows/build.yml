@@ -36,7 +36,7 @@ jobs:
         run: just build-schema
       - name: Yarn Build
         working-directory: frontend
-        run: just yarn build
+        run: yarn build
         
       - name: Deploy 🚀
         uses: JamesIves/github-pages-deploy-action@3.6.2
