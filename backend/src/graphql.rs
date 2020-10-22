@@ -28,12 +28,12 @@ use twilight_permission_calculator::Calculator;
 // FIXME: remove once https://github.com/rarity-rs/permission-calculator upgrades to v 0.2
 use twilight_permission_calculator::prelude as model_v1;
 
-use crate::{OauthUser, consts::REQUIRED_PERMISSIONS};
+use crate::{consts::REQUIRED_PERMISSIONS, OauthUser};
 
 #[derive(Debug)]
 pub struct GraphQLContext {
     pub discord: DiscordContext,
-    pub oauth: OauthUser
+    pub oauth: OauthUser,
 }
 impl Context for GraphQLContext {}
 
@@ -177,7 +177,8 @@ impl VoiceChannelState {
         self.channel_id.map(|id| id.to_string())
     }
     fn member(&self, context: &GraphQLContext) -> FieldResult<Member> {
-        Ok(context.discord
+        Ok(context
+            .discord
             .cache
             .member(
                 self.guild_id
@@ -218,7 +219,8 @@ impl VoiceChannel {
     }
     fn category(&self, context: &GraphQLContext) -> Option<CategoryChannel> {
         self.parent_id.and_then(|parent_id| {
-            context.discord
+            context
+                .discord
                 .cache
                 .guild_channel(parent_id)
                 .and_then(|parent| parent.try_into().ok())
@@ -228,17 +230,20 @@ impl VoiceChannel {
     /// If the bot can operate on the guild
     fn can_operate(&self, context: &GraphQLContext) -> FieldResult<bool> {
         let guild_id = self.guild_id.context("Voice channel missing guild_id")?;
-        let guild = context.discord
+        let guild = context
+            .discord
             .cache
             .guild(guild_id)
             .context("Voice channel guild does not exist")?;
-        let roles = context.discord
+        let roles = context
+            .discord
             .cache
             .guild_roles(guild_id)
             .context("Unable to get roles for the guild")?
             .into_iter()
             .map(|role_id| {
-                context.discord
+                context
+                    .discord
                     .cache
                     .role(role_id)
                     .map(|role| (role_id, role.permissions))
@@ -246,12 +251,14 @@ impl VoiceChannel {
             .collect::<Option<HashMap<_, _>>>()
             .context("Failed to get role information from cache")?;
 
-        let bot_user = context.discord
+        let bot_user = context
+            .discord
             .cache
             .current_user()
             .context("The bot was unable to get information on its user")?;
 
-        let bot_member = context.discord
+        let bot_member = context
+            .discord
             .cache
             .member(guild_id, bot_user.id)
             .context("The bot was unable to get information on itself in the guild")?;
@@ -306,7 +313,8 @@ impl VoiceChannel {
     }
 
     fn states(&self, context: &GraphQLContext) -> Vec<VoiceChannelState> {
-        context.discord
+        context
+            .discord
             .cache
             .voice_channel_states(self.id)
             .unwrap_or_default()
@@ -333,7 +341,8 @@ impl Guild {
     }
     /// The snowflake id of the owner of the guild
     fn owner(&self, context: &GraphQLContext) -> FieldResult<Member> {
-        Ok(context.discord
+        Ok(context
+            .discord
             .cache
             .member(self.id, self.owner_id)
             .context("The guild owner was not found in the cache")?
@@ -349,13 +358,15 @@ impl Guild {
     }
     /// Get the voice channels in the guild
     fn voice_channels(&self, context: &GraphQLContext) -> Vec<VoiceChannel> {
-        context.discord
+        context
+            .discord
             .cache
             .guild_channels(self.id)
             .map(|ids| {
                 ids.into_iter()
                     .filter_map(|id| {
-                        context.discord
+                        context
+                            .discord
                             .cache
                             .guild_channel(id)
                             .and_then(|c| c.try_into().ok())
@@ -370,19 +381,22 @@ impl Guild {
         context: &GraphQLContext,
         id: String,
     ) -> FieldResult<Option<VoiceChannel>> {
-        Ok(context.discord
+        Ok(context
+            .discord
             .cache
             .guild_channel(ChannelId(id.parse().context("Invalid channel id")?))
             .and_then(|c| c.try_into().ok()))
     }
     fn members(&self, context: &GraphQLContext) -> Vec<Member> {
-        context.discord
+        context
+            .discord
             .cache
             .guild_members(self.id)
             .map(|ids| {
                 ids.into_iter()
                     .filter_map(|id| {
-                        context.discord
+                        context
+                            .discord
                             .cache
                             .member(self.id, id)
                             .map(|member| member.into())
@@ -392,7 +406,8 @@ impl Guild {
             .unwrap_or_default()
     }
     fn member(&self, context: &GraphQLContext, id: String) -> FieldResult<Option<Member>> {
-        Ok(context.discord
+        Ok(context
+            .discord
             .cache
             .member(self.id, UserId(id.parse().context("Invalid user id")?))
             .map(|member| member.into()))
@@ -420,7 +435,8 @@ pub struct QueryRoot;
 impl QueryRoot {
     /// Get a guild by id
     fn guild(context: &GraphQLContext, id: String) -> FieldResult<Option<Guild>> {
-        Ok(context.discord
+        Ok(context
+            .discord
             .cache
             .guild(GuildId(id.parse().context("Invalid guild id")?))
             .map(|g| g.into()))
@@ -429,7 +445,13 @@ impl QueryRoot {
         let user = UserId(user.parse().context("Invalid user id")?);
 
         task::block_on(async move {
-            for guild in context.discord.http.current_user_guilds().limit(100)?.await? {
+            for guild in context
+                .discord
+                .http
+                .current_user_guilds()
+                .limit(100)?
+                .await?
+            {
                 context.discord.http.guild_members(guild.id).await?;
                 dbg!(guild);
             }
@@ -459,14 +481,18 @@ impl QueryRoot {
     }
     /// Get information about the bot user
     fn bot(&self, context: &GraphQLContext) -> FieldResult<Me> {
-        Ok(context.discord
+        Ok(context
+            .discord
             .cache
             .current_user()
             .context("Unable to get information on the bot user from the cache")?
             .into())
     }
     fn me(&self, context: &GraphQLContext) -> String {
-        task::block_on(context.oauth.http.current_user()).unwrap().id.to_string() // FIXME
+        task::block_on(context.oauth.http.current_user())
+            .unwrap()
+            .id
+            .to_string() // FIXME
     }
     // TODO: ME as in logged in user
 }
@@ -524,7 +550,8 @@ fn mass_update_voice_state(
 
                 async move {
                     if state.mute != mute {
-                        if let Ok(_) = context.discord
+                        if let Ok(_) = context
+                            .discord
                             .http
                             .update_guild_member(guild_id, state.user_id)
                             .mute(mute)

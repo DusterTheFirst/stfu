@@ -20,7 +20,6 @@ pub const FRONTEND_URL: &str = "https://stfu.duserthefirst.com";
 #[cfg(debug_assertions)]
 pub const FRONTEND_URL: &str = "http://localhost:3000";
 
-
 /// The frontend's url
 #[cfg(not(debug_assertions))]
 pub const BACKEND_URL: &str = "https://stfu-backend.duserthefirst.com";
