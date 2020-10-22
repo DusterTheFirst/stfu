@@ -494,7 +494,7 @@ impl QueryRoot {
             .await
             .unwrap()
             .id
-            .to_string() // FIXME
+            .to_string() // FIXME:
     }
     // TODO: ME as in logged in user
 }
