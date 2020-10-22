@@ -4,7 +4,6 @@ use anyhow::Context as _;
 use async_std::task;
 use futures::future::join_all;
 use juniper::{Context, FieldResult, RootNode};
-use rarity_permission_calculator::Calculator;
 use std::{
     collections::HashMap,
     convert::{TryFrom, TryInto},
@@ -16,20 +15,29 @@ use std::{
 };
 use twilight_cache_inmemory::{model::CachedGuild, model::CachedMember, InMemoryCache};
 use twilight_gateway::Shard;
-use twilight_http::Client;
+use twilight_http::Client as HttpClient;
 use twilight_model::{
     channel::{self, permission_overwrite::PermissionOverwriteType, GuildChannel},
     id::{ChannelId, GuildId, UserId},
     user::CurrentUser,
     voice::VoiceState,
 };
+use twilight_oauth2::Client as OauthClient;
+use twilight_permission_calculator::Calculator;
 
 // FIXME: remove once https://github.com/rarity-rs/permission-calculator upgrades to v 0.2
-use rarity_permission_calculator::prelude as model_v1;
+use twilight_permission_calculator::prelude as model_v1;
 
-use crate::consts::REQUIRED_PERMISSIONS;
+use crate::{OauthUser, consts::REQUIRED_PERMISSIONS};
 
 #[derive(Debug)]
+pub struct GraphQLContext {
+    pub discord: DiscordContext,
+    pub oauth: OauthUser
+}
+impl Context for GraphQLContext {}
+
+#[derive(Debug, Clone)]
 /// The juniper context to provide access to the discord api and bot
 pub struct DiscordContext {
     /// The discord cache connected to the gateway
@@ -37,9 +45,10 @@ pub struct DiscordContext {
     /// The shard, connected to the gateway
     pub shard: Shard,
     /// The discord http client for rest calls
-    pub http: Client,
+    pub http: HttpClient,
+    /// The discord oauth client for authentication
+    pub oauth: OauthClient,
 }
-impl Context for DiscordContext {}
 
 /// A macro to create transparent wrappers of non graphql types for use with juniper
 macro_rules! transparent_wrapper {
@@ -109,7 +118,7 @@ impl TryFrom<Arc<GuildChannel>> for VoiceChannel {
 }
 
 // Create juniper objects
-#[juniper::object(Context = DiscordContext)]
+#[juniper::object(Context = GraphQLContext)]
 impl Member {
     fn avatar(&self) -> Option<&String> {
         self.user.avatar.as_ref()
@@ -123,12 +132,12 @@ impl Member {
     fn nick(&self) -> &Option<String> {
         &self.nick
     }
-    fn color(&self, discord: &DiscordContext) -> FieldResult<Option<i32>> {
+    fn color(&self, context: &GraphQLContext) -> FieldResult<Option<i32>> {
         let mut roles = self
             .roles
             .iter()
             .cloned()
-            .filter_map(|role_id| discord.cache.role(role_id))
+            .filter_map(|role_id| context.discord.cache.role(role_id))
             .collect::<Vec<_>>();
         roles.sort_by_key(|role| role.position);
         Ok(roles.last().map(|role| role.color.try_into()).transpose()?)
@@ -147,7 +156,7 @@ impl Member {
     }
 }
 
-#[juniper::object(Context = DiscordContext)]
+#[juniper::object(Context = GraphQLContext)]
 impl VoiceChannelState {
     fn id(&self) -> String {
         self.user_id.to_string()
@@ -167,8 +176,8 @@ impl VoiceChannelState {
     fn channel_id(&self) -> Option<String> {
         self.channel_id.map(|id| id.to_string())
     }
-    fn member(&self, discord: &DiscordContext) -> FieldResult<Member> {
-        Ok(discord
+    fn member(&self, context: &GraphQLContext) -> FieldResult<Member> {
+        Ok(context.discord
             .cache
             .member(
                 self.guild_id
@@ -193,7 +202,7 @@ impl CategoryChannel {
     }
 }
 
-#[juniper::object(Context = DiscordContext)]
+#[juniper::object(Context = GraphQLContext)]
 impl VoiceChannel {
     fn name(&self) -> &str {
         self.name.as_str()
@@ -207,9 +216,9 @@ impl VoiceChannel {
     fn position(&self) -> FieldResult<i32> {
         Ok(self.position.try_into()?)
     }
-    fn category(&self, discord: &DiscordContext) -> Option<CategoryChannel> {
+    fn category(&self, context: &GraphQLContext) -> Option<CategoryChannel> {
         self.parent_id.and_then(|parent_id| {
-            discord
+            context.discord
                 .cache
                 .guild_channel(parent_id)
                 .and_then(|parent| parent.try_into().ok())
@@ -217,19 +226,19 @@ impl VoiceChannel {
     }
 
     /// If the bot can operate on the guild
-    fn can_operate(&self, discord: &DiscordContext) -> FieldResult<bool> {
+    fn can_operate(&self, context: &GraphQLContext) -> FieldResult<bool> {
         let guild_id = self.guild_id.context("Voice channel missing guild_id")?;
-        let guild = discord
+        let guild = context.discord
             .cache
             .guild(guild_id)
             .context("Voice channel guild does not exist")?;
-        let roles = discord
+        let roles = context.discord
             .cache
             .guild_roles(guild_id)
             .context("Unable to get roles for the guild")?
             .into_iter()
             .map(|role_id| {
-                discord
+                context.discord
                     .cache
                     .role(role_id)
                     .map(|role| (role_id, role.permissions))
@@ -237,12 +246,12 @@ impl VoiceChannel {
             .collect::<Option<HashMap<_, _>>>()
             .context("Failed to get role information from cache")?;
 
-        let bot_user = discord
+        let bot_user = context.discord
             .cache
             .current_user()
             .context("The bot was unable to get information on its user")?;
 
-        let bot_member = discord
+        let bot_member = context.discord
             .cache
             .member(guild_id, bot_user.id)
             .context("The bot was unable to get information on itself in the guild")?;
@@ -296,8 +305,8 @@ impl VoiceChannel {
         Ok(permissions.contains(REQUIRED_PERMISSIONS))
     }
 
-    fn states(&self, discord: &DiscordContext) -> Vec<VoiceChannelState> {
-        discord
+    fn states(&self, context: &GraphQLContext) -> Vec<VoiceChannelState> {
+        context.discord
             .cache
             .voice_channel_states(self.id)
             .unwrap_or_default()
@@ -308,7 +317,7 @@ impl VoiceChannel {
 }
 
 /// A discord guild
-#[juniper::object(Context = DiscordContext)]
+#[juniper::object(Context = GraphQLContext)]
 impl Guild {
     /// The guilds snowflake id
     fn id(&self) -> String {
@@ -323,8 +332,8 @@ impl Guild {
         self.unavailable
     }
     /// The snowflake id of the owner of the guild
-    fn owner(&self, discord: &DiscordContext) -> FieldResult<Member> {
-        Ok(discord
+    fn owner(&self, context: &GraphQLContext) -> FieldResult<Member> {
+        Ok(context.discord
             .cache
             .member(self.id, self.owner_id)
             .context("The guild owner was not found in the cache")?
@@ -339,14 +348,14 @@ impl Guild {
         self.banner.as_ref()
     }
     /// Get the voice channels in the guild
-    fn voice_channels(&self, discord: &DiscordContext) -> Vec<VoiceChannel> {
-        discord
+    fn voice_channels(&self, context: &GraphQLContext) -> Vec<VoiceChannel> {
+        context.discord
             .cache
             .guild_channels(self.id)
             .map(|ids| {
                 ids.into_iter()
                     .filter_map(|id| {
-                        discord
+                        context.discord
                             .cache
                             .guild_channel(id)
                             .and_then(|c| c.try_into().ok())
@@ -358,22 +367,22 @@ impl Guild {
     /// Get a specific voice channel in the guild
     fn voice_channel(
         &self,
-        discord: &DiscordContext,
+        context: &GraphQLContext,
         id: String,
     ) -> FieldResult<Option<VoiceChannel>> {
-        Ok(discord
+        Ok(context.discord
             .cache
             .guild_channel(ChannelId(id.parse().context("Invalid channel id")?))
             .and_then(|c| c.try_into().ok()))
     }
-    fn members(&self, discord: &DiscordContext) -> Vec<Member> {
-        discord
+    fn members(&self, context: &GraphQLContext) -> Vec<Member> {
+        context.discord
             .cache
             .guild_members(self.id)
             .map(|ids| {
                 ids.into_iter()
                     .filter_map(|id| {
-                        discord
+                        context.discord
                             .cache
                             .member(self.id, id)
                             .map(|member| member.into())
@@ -382,8 +391,8 @@ impl Guild {
             })
             .unwrap_or_default()
     }
-    fn member(&self, discord: &DiscordContext, id: String) -> FieldResult<Option<Member>> {
-        Ok(discord
+    fn member(&self, context: &GraphQLContext, id: String) -> FieldResult<Option<Member>> {
+        Ok(context.discord
             .cache
             .member(self.id, UserId(id.parse().context("Invalid user id")?))
             .map(|member| member.into()))
@@ -407,21 +416,21 @@ impl Me {
 /// The root object for GraphQL queries
 pub struct QueryRoot;
 
-#[juniper::object(Context = DiscordContext)]
+#[juniper::object(Context = GraphQLContext)]
 impl QueryRoot {
     /// Get a guild by id
-    fn guild(discord: &DiscordContext, id: String) -> FieldResult<Option<Guild>> {
-        Ok(discord
+    fn guild(context: &GraphQLContext, id: String) -> FieldResult<Option<Guild>> {
+        Ok(context.discord
             .cache
             .guild(GuildId(id.parse().context("Invalid guild id")?))
             .map(|g| g.into()))
     }
-    fn shared_guilds(discord: &DiscordContext, user: String) -> FieldResult<Vec<Guild>> {
+    fn shared_guilds(context: &GraphQLContext, user: String) -> FieldResult<Vec<Guild>> {
         let user = UserId(user.parse().context("Invalid user id")?);
 
         task::block_on(async move {
-            for guild in discord.http.current_user_guilds().limit(100)?.await? {
-                discord.http.guild_members(guild.id).await?;
+            for guild in context.discord.http.current_user_guilds().limit(100)?.await? {
+                context.discord.http.guild_members(guild.id).await?;
                 dbg!(guild);
             }
 
@@ -449,12 +458,15 @@ impl QueryRoot {
         //     .collect())
     }
     /// Get information about the bot user
-    fn bot(&self, discord: &DiscordContext) -> FieldResult<Me> {
-        Ok(discord
+    fn bot(&self, context: &GraphQLContext) -> FieldResult<Me> {
+        Ok(context.discord
             .cache
             .current_user()
             .context("Unable to get information on the bot user from the cache")?
             .into())
+    }
+    fn me(&self, context: &GraphQLContext) -> String {
+        task::block_on(context.oauth.http.current_user()).unwrap().id.to_string() // FIXME
     }
     // TODO: ME as in logged in user
 }
@@ -463,28 +475,28 @@ impl QueryRoot {
 /// The root object for GraphQL mutations
 pub struct MutationRoot;
 
-#[juniper::object(Context = DiscordContext)]
+#[juniper::object(Context = GraphQLContext)]
 impl MutationRoot {
     fn mute(
         guild_id: String,
         channel_id: String,
-        discord: &DiscordContext,
+        context: &GraphQLContext,
     ) -> FieldResult<Vec<String>> {
         let guild_id = GuildId(guild_id.parse().context("Invalid guild id")?);
         let channel_id = ChannelId(channel_id.parse().context("Invalid channel id")?);
 
-        mass_update_voice_state(discord, channel_id, guild_id, true)
+        mass_update_voice_state(context, channel_id, guild_id, true)
             .map(|ids| ids.into_iter().map(|id| id.to_string()).collect())
     }
     fn unmute(
         guild_id: String,
         channel_id: String,
-        discord: &DiscordContext,
+        context: &GraphQLContext,
     ) -> FieldResult<Vec<String>> {
         let guild_id = GuildId(guild_id.parse().context("Invalid guild id")?);
         let channel_id = ChannelId(channel_id.parse().context("Invalid channel id")?);
 
-        mass_update_voice_state(discord, channel_id, guild_id, false)
+        mass_update_voice_state(context, channel_id, guild_id, false)
             .map(|ids| ids.into_iter().map(|id| id.to_string()).collect())
     }
     // fn create_human(new_human: NewHuman) -> FieldResult<Human> {
@@ -498,12 +510,12 @@ impl MutationRoot {
 }
 
 fn mass_update_voice_state(
-    discord: &DiscordContext,
+    context: &GraphQLContext,
     channel_id: ChannelId,
     guild_id: GuildId,
     mute: bool,
 ) -> FieldResult<Vec<UserId>> {
-    if let Some(states) = discord.cache.voice_channel_states(channel_id) {
+    if let Some(states) = context.discord.cache.voice_channel_states(channel_id) {
         let (send_muted, recieve_muted) = mpsc::channel();
 
         for chunk in states.chunks(10) {
@@ -512,7 +524,7 @@ fn mass_update_voice_state(
 
                 async move {
                     if state.mute != mute {
-                        if let Ok(_) = discord
+                        if let Ok(_) = context.discord
                             .http
                             .update_guild_member(guild_id, state.user_id)
                             .mute(mute)

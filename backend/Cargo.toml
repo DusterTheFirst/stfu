@@ -9,15 +9,23 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0.33"
 async-std = { version = "1.6.5", features = ["tokio02", "attributes", "unstable"] }
-futures = "0.3.6"
 ctrlc = "3.1.7"
+futures = "0.3.6"
 juniper = "0.14.2"
 juniper_rocket = "0.5.2"
 log = "0.4.11"
 pretty_env_logger = "0.4.0"
-rarity-permission-calculator = { branch = "main", git = "https://github.com/rarity-rs/permission-calculator" }
+reqwest = "0.10.8"
 rocket = "0.4.5"
 rocket_cors = "0.5.2"
+serde = { version = "1.0.117", features = ["derive"] }
+serde_json = "1.0.59"
+urlencoding = "1.1.1"
+
+# Twilight mess
+twilight-permission-calculator = { branch = "branding", git = "https://github.com/dusterthefirst/permission-calculator" }
+twilight-modelv1 = { package = "twilight-model", version = "0.1" }
+twilight-oauth2 = { branch = "trunk", git = "https://github.com/twilight-rs/oauth2" }# TODO: merge to stable
 # FIXME: move to tagged release once viable
 twilight-cache-inmemory = { branch = "trunk", git = "https://github.com/twilight-rs/twilight" }
 twilight-embed-builder = { branch = "trunk", git = "https://github.com/twilight-rs/twilight" }
@@ -26,8 +34,6 @@ twilight-http = { branch = "trunk", git = "https://github.com/twilight-rs/twilig
 twilight-mention = { branch = "trunk", git = "https://github.com/twilight-rs/twilight" }
 twilight-model = { branch = "trunk", git = "https://github.com/twilight-rs/twilight" }
 twilight-standby = { branch = "trunk", git = "https://github.com/twilight-rs/twilight" }
-# twilight-oauth2 = { branch = "oauth2", git = "https://github.com/vivian/twilight" } TODO: wait for merge to stable
-serde_json = { version = "1.0.59", optional = true }
 
 [features]
-generate_schema = ["serde_json"]
+generate_schema = []

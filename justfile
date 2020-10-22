@@ -21,3 +21,7 @@ yarn-run action:
 
 yarn:
 	cd frontend && yarn
+
+tunnel:
+	@echo "Tunneling local=>server 8000=>8888 3000=>3333"
+	@ssh -N -L 8000:localhost:8888 -L 3000:localhost:3333 app@192.168.2.2
