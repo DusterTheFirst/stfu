@@ -16,20 +16,19 @@ use async_std::{stream::StreamExt, task};
 use consts::{oauth, AUTH_COOKIE_NAME, BACKEND_URL, FRONTEND_URL};
 use content::Html;
 use graphql::{create_schema, DiscordContext, GraphQLContext, Schema};
-use juniper_rocket::{graphiql_source, GraphQLRequest, GraphQLResponse};
+use juniper_rocket_async::{graphiql_source, GraphQLRequest, GraphQLResponse};
 use log::{error, info, trace, warn};
 use reqwest::{header::HeaderMap, Client as ReqwestClient};
 use rocket::{
-    config::Environment,
     http::Status,
-    http::{Cookie, Cookies, RawStr},
+    http::{Cookie, CookieJar, RawStr},
     request::FromRequest,
     request::Outcome,
     response::Debug,
     response::{content, Redirect},
-    routes, uri, Config, State,
+    routes, uri, State,
 };
-use rocket_cors::{Cors, CorsOptions};
+// use rocket_cors::{Cors, CorsOptions};
 use serde::{Deserialize, Serialize};
 use std::{
     env,
@@ -60,36 +59,40 @@ fn graphiql_no_auth() -> Redirect {
 
 #[rocket::get("/graphql?<request>")]
 #[allow(clippy::needless_pass_by_value)]
-fn get_graphql_handler(
-    discord: State<DiscordContext>,
+async fn get_graphql_handler<'r>(
+    discord: State<DiscordContext, 'r>,
     oauth: OauthUser,
-    schema: State<Schema>,
+    schema: State<Schema, 'r>,
     request: GraphQLRequest,
 ) -> GraphQLResponse {
-    request.execute(
-        &schema,
-        &GraphQLContext {
-            discord: discord.clone(),
-            oauth,
-        },
-    )
+    request
+        .execute(
+            &schema,
+            &GraphQLContext {
+                discord: discord.clone(),
+                oauth,
+            },
+        )
+        .await
 }
 
 #[rocket::post("/graphql", data = "<request>")]
 #[allow(clippy::needless_pass_by_value)]
-fn post_graphql_handler(
-    discord: State<DiscordContext>,
+async fn post_graphql_handler<'r>(
+    discord: State<DiscordContext, 'r>,
     oauth: OauthUser,
-    schema: State<Schema>,
+    schema: State<Schema, 'r>,
     request: GraphQLRequest,
 ) -> GraphQLResponse {
-    request.execute(
-        &schema,
-        &GraphQLContext {
-            discord: discord.clone(),
-            oauth,
-        },
-    )
+    request
+        .execute(
+            &schema,
+            &GraphQLContext {
+                discord: discord.clone(),
+                oauth,
+            },
+        )
+        .await
 }
 
 #[rocket::get("/oauth/login?<from>")]
@@ -116,7 +119,7 @@ fn oauth_authorize(
     reqwest: State<ReqwestClient>,
     code: String,
     state: &RawStr,
-    mut cookies: Cookies,
+    cookies: &CookieJar<'_>,
 ) -> Result<Redirect, Debug<anyhow::Error>> {
     // FIXME: Better error page
     let mut request = discord.oauth.access_token_exchange(code.as_ref());
@@ -209,10 +212,11 @@ pub struct OauthUser {
     pub auth: OauthCookie,
 }
 
+#[rocket::async_trait]
 impl<'a, 'r> FromRequest<'a, 'r> for OauthUser {
     type Error = serde_json::Error;
 
-    fn from_request(request: &'a rocket::Request<'r>) -> Outcome<Self, Self::Error> {
+    async fn from_request(request: &'a rocket::Request<'r>) -> Outcome<Self, Self::Error> {
         let cookie = request.cookies().get_private(AUTH_COOKIE_NAME);
 
         dbg!(&cookie);
@@ -306,42 +310,40 @@ async fn main() -> anyhow::Result<()> {
         });
     }
 
-    rocket::custom(
-        Config::build(Environment::active()?)
-            .address("127.0.0.1")
-            .unwrap(),
-    )
-    .manage(
-        ReqwestClient::builder()
-            .user_agent("Discord Bot: STFU")
-            .build()?,
-    )
-    .manage(DiscordContext {
-        cache,
-        http,
-        shard,
-        oauth,
-    })
-    .manage(create_schema())
-    .mount(
-        "/",
-        routes![
-            graphiql,
-            graphiql_no_auth,
-            get_graphql_handler,
-            post_graphql_handler,
-            oauth_login,
-            oauth_authorize
-        ],
-    )
-    .attach(
-        Cors::from_options(&CorsOptions {
-            // allow_credentials: true,
-            ..CorsOptions::default()
+    rocket::ignite()
+        .manage(
+            ReqwestClient::builder()
+                .user_agent("Discord Bot: STFU")
+                .build()?,
+        )
+        .manage(DiscordContext {
+            cache,
+            http,
+            shard,
+            oauth,
         })
-        .context("Failed to setup cors")?,
-    )
-    .launch(); // FIXME: Error handling, and json only responses
+        .manage(create_schema())
+        .mount(
+            "/",
+            routes![
+                graphiql,
+                graphiql_no_auth,
+                get_graphql_handler,
+                post_graphql_handler,
+                oauth_login,
+                oauth_authorize
+            ],
+        )
+        // .attach(
+        //     Cors::from_options(&CorsOptions {
+        //         // allow_credentials: true,
+        //         ..CorsOptions::default()
+        //     })
+        //     .context("Failed to setup cors")?,
+        // )
+        .launch()
+        .await
+        .ok(); // FIXME: Error handling, and json only responses
 
     Ok(())
 }
