@@ -12,25 +12,25 @@ pub const REQUIRED_PERMISSIONS: Permissions = Permissions::from_bits_truncate(
 /// The name of the cookie used to store auth data
 pub const AUTH_COOKIE_NAME: &str = "stfu-auth";
 
-/// The frontend's url
+/// The front end's url
 #[cfg(not(debug_assertions))]
 pub const FRONTEND_URL: &str = "https://stfu.duserthefirst.com";
 
-/// The frontend's url
+/// The front end's url
 #[cfg(debug_assertions)]
 pub const FRONTEND_URL: &str = "http://localhost:3000";
 
-/// The frontend's url
+/// The back end's url
 #[cfg(not(debug_assertions))]
 pub const BACKEND_URL: &str = "https://stfu-backend.duserthefirst.com";
 
-/// The frontend's url
+/// The back end's url
 #[cfg(debug_assertions)]
 pub const BACKEND_URL: &str = "http://localhost:8000";
 
 /// Defaults exposed to the rest of the server, can probably be override with an environment variable
 pub mod oauth {
-    use twilight_modelv1::id::ApplicationId;
+    use twilight_model_v1::id::ApplicationId;
     use twilight_oauth2::Scope;
 
     /// The client id of the oauth application

@@ -1,7 +1,6 @@
 //! The definitions for the graphql api
 
 use anyhow::Context as _;
-use async_std::task;
 use futures::future::join_all;
 use juniper::{graphql_object, Context, EmptySubscription, FieldResult, RootNode};
 use std::{
@@ -28,17 +27,22 @@ use twilight_permission_calculator::Calculator;
 // FIXME: remove once https://github.com/rarity-rs/permission-calculator upgrades to v 0.2
 use twilight_permission_calculator::prelude as model_v1;
 
-use crate::{consts::REQUIRED_PERMISSIONS, OauthUser};
+use crate::{auth::OauthUser, consts::REQUIRED_PERMISSIONS};
 
+/// The juniper context to provide access to the user and discord api
 #[derive(Debug)]
 pub struct GraphQLContext {
+    /// The nested discord context
     pub discord: DiscordContext,
+    /// The user who is authenticated with oauth
     pub user: OauthUser,
 }
 impl Context for GraphQLContext {}
 
 #[derive(Debug, Clone)]
 /// The juniper context to provide access to the discord api and bot
+///
+/// This context derives clone since it is just 4 pointers, it can be cloned rather effortlessly
 pub struct DiscordContext {
     /// The discord cache connected to the gateway
     pub cache: InMemoryCache,
@@ -47,7 +51,7 @@ pub struct DiscordContext {
     /// The discord http client for rest calls
     pub http: HttpClient,
     /// The discord oauth client for authentication
-    pub oauth: OauthClient,
+    pub oauth: Arc<OauthClient>,
 }
 
 /// A macro to create transparent wrappers of non graphql types for use with juniper
@@ -441,19 +445,12 @@ impl QueryRoot {
             .guild(GuildId(id.parse().context("Invalid guild id")?))
             .map(|g| g.into()))
     }
-    async fn shared_guilds(context: &GraphQLContext, user: String) -> FieldResult<Vec<Guild>> {
-        let user = UserId(user.parse().context("Invalid user id")?);
+    async fn shared_guilds(context: &GraphQLContext) -> FieldResult<Vec<Guild>> {
+        let bot_guilds = context.discord.http.current_user_guilds().await?;
 
-        for guild in context
-            .discord
-            .http
-            .current_user_guilds()
-            .limit(100)?
-            .await?
-        {
-            context.discord.http.guild_members(guild.id).await?;
-            dbg!(guild);
-        }
+        let user_guilds = context.user.http.current_user_guilds().await?;
+
+        dbg!(user_guilds, bot_guilds);
 
         Ok(vec![]) // FIXME:
 
@@ -546,7 +543,7 @@ async fn mass_update_voice_state(
     mute: bool,
 ) -> FieldResult<Vec<UserId>> {
     if let Some(states) = context.discord.cache.voice_channel_states(channel_id) {
-        let (send_muted, recieve_muted) = mpsc::channel();
+        let (send_muted, receive_muted) = mpsc::channel();
 
         for chunk in states.chunks(10) {
             let send_muted = send_muted.clone();
@@ -571,7 +568,7 @@ async fn mass_update_voice_state(
             .await;
         }
 
-        Ok(recieve_muted.try_iter().collect())
+        Ok(receive_muted.try_iter().collect())
     } else {
         Ok(Vec::new())
     }
