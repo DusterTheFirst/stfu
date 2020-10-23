@@ -31,9 +31,13 @@ pub const BACKEND_URL: &str = "http://localhost:8000";
 /// Defaults exposed to the rest of the server, can probably be override with an environment variable
 pub mod oauth {
     use twilight_modelv1::id::ApplicationId;
+    use twilight_oauth2::Scope;
 
     /// The client id of the oauth application
     pub const CLIENT_ID: ApplicationId = ApplicationId(746_070_136_980_766_861);
+
+    /// The oauth scopes to ask for
+    pub const SCOPES: &[Scope] = &[Scope::Identify, Scope::Guilds];
 
     /// The oauth redirect url
     #[cfg(debug_assertions)]

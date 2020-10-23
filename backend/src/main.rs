@@ -9,11 +9,13 @@
     missing_copy_implementations
 )]
 #![cfg_attr(feature = "generate_schema", allow(unused_imports))]
-#![feature(decl_macro, proc_macro_hygiene)]
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use async_std::{stream::StreamExt, task};
-use consts::{oauth, AUTH_COOKIE_NAME, BACKEND_URL, FRONTEND_URL};
+use consts::{
+    oauth::{self, SCOPES},
+    AUTH_COOKIE_NAME, BACKEND_URL, FRONTEND_URL,
+};
 use content::Html;
 use graphql::{create_schema, DiscordContext, GraphQLContext, Schema};
 use juniper_rocket_async::{graphiql_source, GraphQLRequest, GraphQLResponse};
@@ -47,7 +49,7 @@ use twilight_oauth2::{
 pub mod consts;
 pub mod graphql;
 
-#[rocket::get("/", rank = 0)]
+#[rocket::get("/")]
 fn graphiql(_user: OauthUser) -> Html<String> {
     graphiql_source("/graphql")
 }
@@ -70,7 +72,7 @@ async fn get_graphql_handler<'r>(
             &schema,
             &GraphQLContext {
                 discord: discord.clone(),
-                oauth,
+                user: oauth,
             },
         )
         .await
@@ -89,7 +91,7 @@ async fn post_graphql_handler<'r>(
             &schema,
             &GraphQLContext {
                 discord: discord.clone(),
-                oauth,
+                user: oauth,
             },
         )
         .await
@@ -102,8 +104,8 @@ fn oauth_login(discord: State<DiscordContext>, from: Option<String>) -> Redirect
         .oauth
         .authorization_url(oauth::REDIRECT_URL)
         .unwrap()
-        .scopes(&[Scope::Identify])
-        .prompt(Prompt::None)
+        .scopes(SCOPES)
+        .prompt(Prompt::Consent)
         .state(&urlencoding::encode(
             &from.unwrap_or_else(|| "/".to_string()),
         ))
@@ -114,21 +116,21 @@ fn oauth_login(discord: State<DiscordContext>, from: Option<String>) -> Redirect
 
 #[rocket::get("/oauth/authorize?<code>&<state>")]
 #[allow(clippy::needless_pass_by_value)]
-fn oauth_authorize(
-    discord: State<DiscordContext>,
-    reqwest: State<ReqwestClient>,
+async fn oauth_authorize<'r>(
+    discord: State<DiscordContext, 'r>,
+    reqwest: State<ReqwestClient, 'r>,
     code: String,
     state: &RawStr,
     cookies: &CookieJar<'_>,
 ) -> Result<Redirect, Debug<anyhow::Error>> {
     // FIXME: Better error page
     let mut request = discord.oauth.access_token_exchange(code.as_ref());
-    let request = request.scopes(&[Scope::Identify]).build();
+    let request = request.scopes(SCOPES).build();
 
-    info!("{}", serde_json::to_string_pretty(&request.body).unwrap());
+    trace!("{}", serde_json::to_string_pretty(&request.body).unwrap());
 
-    let response: Result<AccessTokenExchangeResponse, anyhow::Error> = task::block_on(async {
-        Ok(reqwest
+    let response =
+        reqwest
             .post(&request.url())
             .headers(request.headers.into_iter().fold(
                 HeaderMap::new(),
@@ -143,29 +145,37 @@ fn oauth_authorize(
             .context("Failed to make request")?
             .text()
             .await
-            .context("Failed to read in response from request")?)
-    })
-    .and_then(|res| {
-        Ok(serde_json::from_str(&res).context("Failed to parse the response from the request")?)
-    });
+            .context("Failed to read in response from request")?;
 
-    match response {
-        Ok(response) => {
-            cookies.add_private(Cookie::new(
-                AUTH_COOKIE_NAME,
-                serde_json::to_string(&OauthCookie::from(response))
-                    .expect("Oauth cookie was unable to be serialized"),
-            ));
+    trace!("past response from discord: {}", response);
 
-            Ok(Redirect::to(state.url_decode_lossy()))
-        }
-        Err(e) => {
-            error!("{:?}", e);
+    let response: AccessTokenExchangeResponse =
+        serde_json::from_str(&response).context("Failed to parse the response from the request")?;
 
-            Err(Debug(e))
-            // Redirect::to(format!("{}?error={}", FRONTEND_URL, e.to_string()))
-        }
-    }
+    trace!("past response parsing");
+
+    cookies.add_private(Cookie::new(
+        AUTH_COOKIE_NAME,
+        serde_json::to_string(&OauthCookie::from(response))
+            .context("Oauth cookie was unable to be serialized")?,
+    ));
+
+    trace!(
+        "past cookie add: redirecting to {}",
+        state.url_decode_lossy()
+    );
+
+    Ok(Redirect::to(state.url_decode_lossy()))
+}
+
+#[rocket::get("/oauth/authorize?<error>&<error_description>&<state>", rank = 1)]
+#[allow(clippy::needless_pass_by_value)]
+async fn oauth_authorize_failure<'r>(
+    error: String,
+    error_description: String,
+    state: &RawStr,
+) -> Html<String> {
+    Html(format!("<h1>{error}</h1><pre>{error_description}</pre><a href=\"{back}\">Go back to <b>{back}<b></a>", error=error, error_description=error_description, back=state.percent_decode_lossy()))
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -217,7 +227,10 @@ impl<'a, 'r> FromRequest<'a, 'r> for OauthUser {
     type Error = serde_json::Error;
 
     async fn from_request(request: &'a rocket::Request<'r>) -> Outcome<Self, Self::Error> {
-        let cookie = request.cookies().get_private(AUTH_COOKIE_NAME);
+        let cookies = request.cookies();
+        let cookie = cookies
+            .get_private(AUTH_COOKIE_NAME)
+            .or(cookies.get_private_pending(AUTH_COOKIE_NAME));
 
         dbg!(&cookie);
 
@@ -226,7 +239,7 @@ impl<'a, 'r> FromRequest<'a, 'r> for OauthUser {
                 Ok(cookie) => {
                     // TODO: Auto refresh if time is neigh
                     Outcome::Success(OauthUser {
-                        http: HttpClient::new(cookie.access_token.clone()),
+                        http: HttpClient::new(format!("Bearer {}", cookie.access_token)),
                         auth: cookie,
                     })
                 }
@@ -331,7 +344,8 @@ async fn main() -> anyhow::Result<()> {
                 get_graphql_handler,
                 post_graphql_handler,
                 oauth_login,
-                oauth_authorize
+                oauth_authorize,
+                oauth_authorize_failure
             ],
         )
         // .attach(
@@ -359,9 +373,27 @@ async fn main() {
 
     let cache = InMemoryCache::new();
 
+    let oauth = OauthClient::new(ApplicationId(1), "", &[]).unwrap();
+
     let (res, _errors) = juniper::introspect(
         &create_schema(),
-        &DiscordContext { cache, http, shard },
+        &GraphQLContext {
+            discord: DiscordContext {
+                cache,
+                http,
+                shard,
+                oauth,
+            },
+            user: OauthUser {
+                http: HttpClient::new(""),
+                auth: OauthCookie {
+                    access_token: "".into(),
+                    expires_in: 0,
+                    refresh_token: "".into(),
+                    created_at: 0,
+                },
+            },
+        },
         Default::default(),
     )
     .unwrap();

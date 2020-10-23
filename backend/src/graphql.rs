@@ -33,7 +33,7 @@ use crate::{consts::REQUIRED_PERMISSIONS, OauthUser};
 #[derive(Debug)]
 pub struct GraphQLContext {
     pub discord: DiscordContext,
-    pub oauth: OauthUser,
+    pub user: OauthUser,
 }
 impl Context for GraphQLContext {}
 
@@ -488,7 +488,7 @@ impl QueryRoot {
     }
     async fn me(&self, context: &GraphQLContext) -> String {
         context
-            .oauth
+            .user
             .http
             .current_user()
             .await
@@ -549,7 +549,9 @@ async fn mass_update_voice_state(
         let (send_muted, recieve_muted) = mpsc::channel();
 
         for chunk in states.chunks(10) {
-            join_all(chunk.into_iter().map(|state| {
+            let send_muted = send_muted.clone();
+
+            join_all(chunk.into_iter().map(move |state| {
                 let send_muted = send_muted.clone();
 
                 async move {

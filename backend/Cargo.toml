@@ -27,13 +27,13 @@ twilight-permission-calculator = { branch = "branding", git = "https://github.co
 twilight-modelv1 = { package = "twilight-model", version = "0.1" }
 twilight-oauth2 = { branch = "trunk", git = "https://github.com/twilight-rs/oauth2" }# TODO: merge to stable
 # FIXME: move to tagged release once viable
-twilight-cache-inmemory = { branch = "trunk", git = "https://github.com/twilight-rs/twilight" }
-twilight-embed-builder = { branch = "trunk", git = "https://github.com/twilight-rs/twilight" }
-twilight-gateway = { branch = "trunk", git = "https://github.com/twilight-rs/twilight" }
-twilight-http = { branch = "trunk", git = "https://github.com/twilight-rs/twilight" }
-twilight-mention = { branch = "trunk", git = "https://github.com/twilight-rs/twilight" }
-twilight-model = { branch = "trunk", git = "https://github.com/twilight-rs/twilight" }
-twilight-standby = { branch = "trunk", git = "https://github.com/twilight-rs/twilight" }
+twilight-cache-inmemory = "0.2.0-beta"
+twilight-embed-builder = "0.2.0-beta"
+twilight-gateway = "0.2.0-beta"
+twilight-http = "0.2.0-beta"
+twilight-mention = "0.2.0-beta"
+twilight-model = "0.2.0-beta"
+twilight-standby = "0.2.0-beta"
 
 [features]
 generate_schema = []
