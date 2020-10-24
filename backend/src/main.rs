@@ -12,16 +12,19 @@
 
 use anyhow::Context;
 use async_std::{stream::StreamExt, task};
-use consts::oauth::{CLIENT_ID, REDIRECT_URL};
+use consts::{
+    oauth::{CLIENT_ID, REDIRECT_URL},
+    MITM_PROXY_URL,
+};
 use graphql::{create_schema, DiscordContext};
 use log::warn;
-use reqwest::Client as ReqwestClient;
-use rocket::routes;
+use reqwest::{Certificate, Client as ReqwestClient, Proxy};
+use rocket::{figment::Figment, routes, Config};
 // use rocket_cors::{Cors, CorsOptions};
 use std::{env, sync::Arc};
 use twilight_cache_inmemory::InMemoryCache;
 use twilight_gateway::shard::ShardBuilder;
-use twilight_http::Client as HttpClient;
+use twilight_http::{client::ClientBuilder as HttpClientBuilder, Client as HttpClient};
 use twilight_model::gateway::Intents;
 use twilight_model_v1::id::ApplicationId;
 use twilight_oauth2::Client as OauthClient;
@@ -30,6 +33,28 @@ pub mod auth;
 pub mod consts;
 pub mod graphql;
 pub mod routes;
+pub mod templates;
+
+#[cfg(all(feature = "mitm_proxy", not(debug_assertions)))]
+compile_error!("You cannot have the `mitm_proxy` feature enabled in release mode");
+
+/// Helper function to create a pre-configured http client
+pub fn create_http_client(token: impl Into<String>) -> twilight_http::Result<HttpClient> {
+    let builder = HttpClientBuilder::new().token(token);
+
+    if cfg!(feature = "mitm_proxy") {
+        warn!("Creating a http client with a connection to mitm proxy");
+
+        builder
+            .proxy(Proxy::all(MITM_PROXY_URL).unwrap())
+            .reqwest_client(reqwest::ClientBuilder::new().add_root_certificate(
+                Certificate::from_pem(include_bytes!("../mitmproxy-ca-cert.pem")).unwrap(),
+            ))
+    } else {
+        builder
+    }
+    .build()
+}
 
 #[cfg(not(feature = "generate_schema"))]
 #[async_std::main]
@@ -56,7 +81,7 @@ async fn main() -> anyhow::Result<()> {
 
     let oauth = Arc::new(OauthClient::new(client_id, client_secret, &[REDIRECT_URL])?);
 
-    let http = HttpClient::new(&token);
+    let http = create_http_client(&token)?;
 
     let mut shard = ShardBuilder::new(
         token,
@@ -84,50 +109,50 @@ async fn main() -> anyhow::Result<()> {
         });
     }
 
-    #[cfg(debug_attributes)]
-    {
-        let mut shard = shard.clone();
-        ctrlc::set_handler(move || {
-            shard.shutdown();
-            std::process::exit(1);
-        });
-    }
+    rocket::custom(
+        Figment::from(Config::default())
+            .merge(("address", "0.0.0.0"))
+            .merge(("secret_key", include_bytes!("../cookie.key"))),
+    )
+    .manage(
+        ReqwestClient::builder()
+            .user_agent("Discord Bot: STFU")
+            .build()?,
+    )
+    .manage(DiscordContext {
+        cache,
+        http,
+        shard: shard.clone(),
+        oauth,
+    })
+    .manage(create_schema())
+    .mount(
+        "/",
+        routes![
+            routes::graphql::graphiql,
+            routes::graphql::graphiql_no_auth,
+            routes::graphql::get_graphql_handler,
+            routes::graphql::get_graphql_no_auth,
+            routes::graphql::post_graphql_handler,
+            routes::graphql::post_graphql_no_auth,
+            routes::auth::oauth_login,
+            routes::auth::oauth_authorize,
+            routes::auth::oauth_authorize_failure
+        ],
+    )
+    // .attach(
+    //     Cors::from_options(&CorsOptions {
+    //         // allow_credentials: true,
+    //         ..CorsOptions::default()
+    //     })
+    //     .context("Failed to setup cors")?,
+    // )
+    .launch()
+    .await
+    .ok(); // FIXME: Error handling, and json only responses
 
-    rocket::ignite()
-        .manage(
-            ReqwestClient::builder()
-                .user_agent("Discord Bot: STFU")
-                .build()?,
-        )
-        .manage(DiscordContext {
-            cache,
-            http,
-            shard,
-            oauth,
-        })
-        .manage(create_schema())
-        .mount(
-            "/",
-            routes![
-                routes::graphql::graphiql,
-                routes::graphql::graphiql_no_auth,
-                routes::graphql::get_graphql_handler,
-                routes::graphql::post_graphql_handler,
-                routes::auth::oauth_login,
-                routes::auth::oauth_authorize,
-                routes::auth::oauth_authorize_failure
-            ],
-        )
-        // .attach(
-        //     Cors::from_options(&CorsOptions {
-        //         // allow_credentials: true,
-        //         ..CorsOptions::default()
-        //     })
-        //     .context("Failed to setup cors")?,
-        // )
-        .launch()
-        .await
-        .ok(); // FIXME: Error handling, and json only responses
+    // After server has shutdown
+    shard.shutdown();
 
     Ok(())
 }
@@ -135,6 +160,8 @@ async fn main() -> anyhow::Result<()> {
 #[cfg(feature = "generate_schema")]
 #[async_std::main] // FIXME: maybe move to test or build script
 async fn main() {
+    use twilight_http::Client as HttpClient;
+
     let http = HttpClient::new("");
 
     let shard = ShardBuilder::new("", Intents::empty())
@@ -143,20 +170,20 @@ async fn main() {
 
     let cache = InMemoryCache::new();
 
-    let oauth = OauthClient::new(ApplicationId(1), "", &[]).unwrap();
+    let oauth = Arc::new(OauthClient::new(ApplicationId(1), "", &[]).unwrap());
 
     let (res, _errors) = juniper::introspect(
         &create_schema(),
-        &GraphQLContext {
+        &graphql::GraphQLContext {
             discord: DiscordContext {
                 cache,
                 http,
                 shard,
                 oauth,
             },
-            user: OauthUser {
+            user: auth::OauthUser {
                 http: HttpClient::new(""),
-                auth: OauthCookie {
+                auth: auth::OauthCookie {
                     access_token: "".into(),
                     expires_in: 0,
                     refresh_token: "".into(),

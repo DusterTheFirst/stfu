@@ -5,6 +5,7 @@ use futures::future::join_all;
 use juniper::{graphql_object, Context, EmptySubscription, FieldResult, RootNode};
 use std::{
     collections::HashMap,
+    collections::HashSet,
     convert::{TryFrom, TryInto},
     fmt::Debug,
     mem::transmute,
@@ -416,6 +417,13 @@ impl Guild {
             .member(self.id, UserId(id.parse().context("Invalid user id")?))
             .map(|member| member.into()))
     }
+    async fn me(&self, context: &GraphQLContext) -> FieldResult<Option<Member>> {
+        Ok(context
+            .discord
+            .cache
+            .member(self.id, context.user.http.current_user().await?.id)
+            .map(|member| member.into()))
+    }
 }
 
 #[graphql_object]
@@ -446,33 +454,29 @@ impl QueryRoot {
             .map(|g| g.into()))
     }
     async fn shared_guilds(context: &GraphQLContext) -> FieldResult<Vec<Guild>> {
-        let bot_guilds = context.discord.http.current_user_guilds().await?;
+        let bot_guilds = context
+            .discord
+            .http
+            .current_user_guilds()
+            .await?
+            .into_iter()
+            .map(|x| x.id)
+            .collect::<HashSet<_>>();
 
-        let user_guilds = context.user.http.current_user_guilds().await?;
+        let user_guilds = context
+            .user
+            .http
+            .current_user_guilds()
+            .await?
+            .into_iter()
+            .map(|x| x.id)
+            .collect::<HashSet<_>>();
 
-        dbg!(user_guilds, bot_guilds);
+        let intersection = bot_guilds.intersection(&user_guilds).cloned();
 
-        Ok(vec![]) // FIXME:
-
-        // Ok(
-        //     .into_iter()
-        //     .filter(async |guild| {
-        //         discord
-        //             .http
-        //             .guild_members(guild.id)
-        //             .await
-        //             .context("Failed to get the guild members from a guild")?
-        //             .into_iter()
-        //             .any(|member| member.user.id == user)
-        //     })
-        //     .map(|guild| {
-        //         discord
-        //             .cache
-        //             .guild(guild.id)
-        //             .context("Guild not found in cache")?
-        //             .into()
-        //     })
-        //     .collect())
+        Ok(intersection
+            .filter_map(|id| context.discord.cache.guild(id).map(|guild| guild.into()))
+            .collect())
     }
     /// Get information about the bot user
     fn bot(&self, context: &GraphQLContext) -> FieldResult<Me> {
@@ -483,17 +487,10 @@ impl QueryRoot {
             .context("Unable to get information on the bot user from the cache")?
             .into())
     }
-    async fn me(&self, context: &GraphQLContext) -> String {
-        context
-            .user
-            .http
-            .current_user()
-            .await
-            .unwrap()
-            .id
-            .to_string() // FIXME:
+    // TODO: ME as in logged in users
+    async fn me(&self, context: &GraphQLContext) -> FieldResult<String> {
+        Ok(context.user.http.current_user().await?.id.to_string()) // FIXME:
     }
-    // TODO: ME as in logged in user
 }
 
 #[derive(Copy, Clone, Debug)]

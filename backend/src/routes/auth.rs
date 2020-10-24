@@ -2,16 +2,11 @@
 
 #![allow(clippy::needless_pass_by_value)]
 
-use crate::{
-    auth::OauthCookie,
-    consts::{
+use crate::{templates::HtmlRedirect, auth::OauthCookie, consts::{
         oauth::{REDIRECT_URL, SCOPES},
         AUTH_COOKIE_NAME,
-    },
-    graphql::DiscordContext,
-};
+    }, graphql::DiscordContext};
 use anyhow::Context;
-use log::trace;
 use reqwest::{header::HeaderMap, Client as ReqwestClient};
 use rocket::{
     http::{Cookie, CookieJar, RawStr},
@@ -29,7 +24,7 @@ pub fn oauth_login(discord: State<DiscordContext>, from: Option<String>) -> Redi
         .authorization_url(REDIRECT_URL)
         .unwrap()
         .scopes(SCOPES)
-        .prompt(Prompt::Consent)
+        .prompt(Prompt::None)
         .state(&urlencoding::encode(
             &from.unwrap_or_else(|| "/".to_string()),
         ))
@@ -45,13 +40,11 @@ pub async fn oauth_authorize<'r>(
     reqwest: State<ReqwestClient, 'r>,
     code: String,
     state: &RawStr,
-    cookies: &CookieJar<'_>,
-) -> Result<Redirect, Debug<anyhow::Error>> {
+    cookies: &CookieJar<'r>,
+) -> Result<HtmlRedirect, Debug<anyhow::Error>> {
     // FIXME: Better error page
     let mut request = discord.oauth.access_token_exchange(code.as_ref());
     let request = request.scopes(SCOPES).build();
-
-    trace!("{}", serde_json::to_string_pretty(&request.body).unwrap());
 
     let response =
         reqwest
@@ -71,12 +64,8 @@ pub async fn oauth_authorize<'r>(
             .await
             .context("Failed to read in response from request")?;
 
-    trace!("past response from discord: {}", response);
-
     let response: AccessTokenExchangeResponse =
         serde_json::from_str(&response).context("Failed to parse the response from the request")?;
-
-    trace!("past response parsing");
 
     cookies.add_private(Cookie::new(
         AUTH_COOKIE_NAME,
@@ -84,12 +73,9 @@ pub async fn oauth_authorize<'r>(
             .context("Oauth cookie was unable to be serialized")?,
     ));
 
-    trace!(
-        "past cookie add: redirecting to {}",
-        state.url_decode_lossy()
-    );
-
-    Ok(Redirect::to(state.url_decode_lossy()))
+    Ok(HtmlRedirect {
+        url: state.url_decode_lossy(),
+    })
 }
 
 /// The oauth callback route in case of error
@@ -99,7 +85,8 @@ pub async fn oauth_authorize_failure<'r>(
     error_description: String,
     state: &RawStr,
 ) -> Html<String> {
-    Html(format!("<h1>{error}</h1><pre>{error_description}</pre><a href=\"{back}\">Go back to <b>{back}<b></a>", error=error, error_description=error_description, back=state.percent_decode_lossy()))
+    // FIXME: better error. Flash cookies?
+    Html(format!("<h1>{error}</h1><pre>{error_description}</pre><a href=\"{back}\">Go back to <b>{back}<b></a>", error=error, error_description=error_description, back=state.url_decode_lossy()))
 }
 
 // TODO:

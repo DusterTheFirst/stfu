@@ -12,7 +12,10 @@ backend-build:
 	cargo build --release
 
 backend:
-	cargo watch -x run -w backend
+	cargo watch -x "run" -w backend -w config.toml
+
+backend-mitm:
+	cd backend && cargo watch -x "run --features mitm_proxy" -w . -w ../config.toml
 
 frontend: (yarn-run "start")
 

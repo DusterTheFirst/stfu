@@ -8,6 +8,7 @@ use crate::{
 };
 use juniper_rocket_async::{graphiql_source, GraphQLRequest, GraphQLResponse};
 use rocket::{
+    http::Status,
     response::{content::Html, Redirect},
     uri, State,
 };
@@ -43,6 +44,12 @@ pub async fn get_graphql_handler<'r>(
         .await
 }
 
+/// An error code if not logged in
+#[rocket::get("/graphql?<_request>", rank = 1)]
+pub fn get_graphql_no_auth(_request: GraphQLRequest) -> Status {
+    Status::Unauthorized
+}
+
 /// The post based graphql handler
 #[rocket::post("/graphql", data = "<request>")]
 pub async fn post_graphql_handler<'r>(
@@ -60,4 +67,10 @@ pub async fn post_graphql_handler<'r>(
             },
         )
         .await
+}
+
+/// An error code if not logged in
+#[rocket::post("/graphql", data = "<_request>", rank = 1)]
+pub fn post_graphql_no_auth(_request: GraphQLRequest) -> Status {
+    Status::Unauthorized
 }

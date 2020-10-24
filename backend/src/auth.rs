@@ -1,8 +1,11 @@
 //! Structures and other tools used for authentication
 
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    io::ErrorKind,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
-use crate::consts::AUTH_COOKIE_NAME;
+use crate::{consts::AUTH_COOKIE_NAME, create_http_client};
 use rocket::{
     http::Status,
     request::{FromRequest, Outcome},
@@ -66,21 +69,22 @@ impl<'a, 'r> FromRequest<'a, 'r> for OauthUser {
     type Error = serde_json::Error;
 
     async fn from_request(request: &'a rocket::Request<'r>) -> Outcome<Self, Self::Error> {
-        let cookies = request.cookies();
-        let cookie = cookies
-            .get_private(AUTH_COOKIE_NAME)
-            .or(cookies.get_private_pending(AUTH_COOKIE_NAME));
-
-        dbg!(&cookie);
+        let cookie = request.cookies().get_private(AUTH_COOKIE_NAME);
 
         if let Some(cookie) = cookie {
             match serde_json::from_str::<OauthCookie>(cookie.value()) {
                 Ok(cookie) => {
                     // FIXME: Auto refresh if time is neigh
-                    Outcome::Success(OauthUser {
-                        http: HttpClient::new(format!("Bearer {}", cookie.access_token)),
-                        auth: cookie,
-                    })
+
+                    let http = create_http_client(format!("Bearer {}", cookie.access_token));
+
+                    match http {
+                        Ok(http) => Outcome::Success(OauthUser { http, auth: cookie }),
+                        Err(e) => Outcome::Failure((
+                            Status::InternalServerError,
+                            serde_json::Error::io(std::io::Error::new(ErrorKind::Other, e)),
+                        )),
+                    }
                 }
                 Err(e) => Outcome::Failure((Status::BadRequest, e)),
             }

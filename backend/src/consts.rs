@@ -26,7 +26,10 @@ pub const BACKEND_URL: &str = "https://stfu-backend.duserthefirst.com";
 
 /// The back end's url
 #[cfg(debug_assertions)]
-pub const BACKEND_URL: &str = "http://localhost:8000";
+pub const BACKEND_URL: &str = "http://192.168.69.19:8000";
+
+/// The url to the man in the middle proxy
+pub const MITM_PROXY_URL: &str = "http://localhost:8080";
 
 /// Defaults exposed to the rest of the server, can probably be override with an environment variable
 pub mod oauth {
