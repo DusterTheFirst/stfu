@@ -632,6 +632,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "envy"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f938a4abd5b75fe3737902dbc2e79ca142cc1526827a9e40b829a086758531a9"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "event-listener"
 version = "2.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -892,9 +901,9 @@ dependencies = [
 
 [[package]]
 name = "h2"
-version = "0.2.6"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "993f9e0baeed60001cf565546b0d3dbe6a6ad23f2bd31644a133c641eccf6d53"
+checksum = "5e4728fd124914ad25e99e3d15a9361a879f6620f63cb56bbb08f95abb97a535"
 dependencies = [
  "bytes",
  "fnv",
@@ -907,6 +916,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "tracing-futures",
 ]
 
 [[package]]
@@ -1084,11 +1094,11 @@ dependencies = [
 
 [[package]]
 name = "instant"
-version = "0.1.7"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63312a18f7ea8760cdd0a7c5aac1a619752a246b833545e3e36d1f81f7cd9e66"
+checksum = "cb1fc4429a33e1f80d41dc9fea4d108a88bec1de8053878898ae448a0b52f613"
 dependencies = [
- "cfg-if 0.1.10",
+ "cfg-if 1.0.0",
 ]
 
 [[package]]
@@ -1124,7 +1134,7 @@ dependencies = [
 [[package]]
 name = "juniper"
 version = "0.14.2"
-source = "git+https://github.com/graphql-rust/juniper?branch=master#3e4cf680e2cb07d4deca207ff1753bcab18e9a97"
+source = "git+https://github.com/graphql-rust/juniper?branch=master#cd66bdb45063090164130eb970bec232008bdaa2"
 dependencies = [
  "async-trait",
  "fnv",
@@ -1139,7 +1149,7 @@ dependencies = [
 [[package]]
 name = "juniper_codegen"
 version = "0.14.2"
-source = "git+https://github.com/graphql-rust/juniper?branch=master#3e4cf680e2cb07d4deca207ff1753bcab18e9a97"
+source = "git+https://github.com/graphql-rust/juniper?branch=master#cd66bdb45063090164130eb970bec232008bdaa2"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",
@@ -1150,7 +1160,7 @@ dependencies = [
 [[package]]
 name = "juniper_rocket_async"
 version = "0.5.1"
-source = "git+https://github.com/graphql-rust/juniper?branch=master#3e4cf680e2cb07d4deca207ff1753bcab18e9a97"
+source = "git+https://github.com/graphql-rust/juniper?branch=master#cd66bdb45063090164130eb970bec232008bdaa2"
 dependencies = [
  "futures",
  "juniper",
@@ -1803,7 +1813,7 @@ dependencies = [
 [[package]]
 name = "rocket"
 version = "0.5.0-dev"
-source = "git+https://github.com/SergioBenitez/Rocket?branch=master#198b6f0e9726f7e53c61d365b797df630c876c59"
+source = "git+https://github.com/SergioBenitez/Rocket?branch=master#0c150c2a0ef07a94108e272dd545d40f0fe31c22"
 dependencies = [
  "async-trait",
  "atomic",
@@ -1832,7 +1842,7 @@ dependencies = [
 [[package]]
 name = "rocket_codegen"
 version = "0.5.0-dev"
-source = "git+https://github.com/SergioBenitez/Rocket?branch=master#198b6f0e9726f7e53c61d365b797df630c876c59"
+source = "git+https://github.com/SergioBenitez/Rocket?branch=master#0c150c2a0ef07a94108e272dd545d40f0fe31c22"
 dependencies = [
  "devise",
  "glob",
@@ -1844,7 +1854,7 @@ dependencies = [
 [[package]]
 name = "rocket_http"
 version = "0.5.0-dev"
-source = "git+https://github.com/SergioBenitez/Rocket?branch=master#198b6f0e9726f7e53c61d365b797df630c876c59"
+source = "git+https://github.com/SergioBenitez/Rocket?branch=master#0c150c2a0ef07a94108e272dd545d40f0fe31c22"
 dependencies = [
  "cookie",
  "either",
@@ -2181,6 +2191,7 @@ dependencies = [
  "askama",
  "async-std",
  "dotenv",
+ "envy",
  "futures",
  "juniper",
  "juniper_rocket_async",
@@ -2212,9 +2223,9 @@ checksum = "343f3f510c2915908f155e94f17220b19ccfacf2a64a2a5d8004f2c3e311e7fd"
 
 [[package]]
 name = "syn"
-version = "1.0.46"
+version = "1.0.48"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ad5de3220ea04da322618ded2c42233d02baca219d6f160a3e9c87cda16c942"
+checksum = "cc371affeffc477f42a221a1e4297aedcea33d47d19b61455588bd9d8f6b19ac"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2413,6 +2424,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f50de3927f93d202783f4513cda820ab47ef17f624b03c096e86ef00c67e6b5f"
 dependencies = [
  "lazy_static",
+]
+
+[[package]]
+name = "tracing-futures"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab7bb6f14721aa00656086e9335d363c5c8747bae02ebe32ea2c7dece5689b4c"
+dependencies = [
+ "pin-project 0.4.27",
+ "tracing",
 ]
 
 [[package]]

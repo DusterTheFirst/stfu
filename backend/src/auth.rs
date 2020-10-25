@@ -1,16 +1,13 @@
 //! Structures and other tools used for authentication
 
-use std::{
-    io::ErrorKind,
-    time::{SystemTime, UNIX_EPOCH},
-};
-
-use crate::{consts::AUTH_COOKIE_NAME, create_http_client};
+use crate::{config::Config, create_http_client};
+use anyhow::anyhow;
 use rocket::{
     http::Status,
     request::{FromRequest, Outcome},
 };
 use serde::{Deserialize, Serialize};
+use std::time::{SystemTime, UNIX_EPOCH};
 use twilight_http::Client as HttpClient;
 use twilight_oauth2::request::access_token_exchange::AccessTokenExchangeResponse;
 
@@ -66,27 +63,35 @@ pub struct OauthUser {
 
 #[rocket::async_trait]
 impl<'a, 'r> FromRequest<'a, 'r> for OauthUser {
-    type Error = serde_json::Error;
+    type Error = anyhow::Error;
 
     async fn from_request(request: &'a rocket::Request<'r>) -> Outcome<Self, Self::Error> {
-        let cookie = request.cookies().get_private(AUTH_COOKIE_NAME);
+        let config: &Config = match request.managed_state() {
+            Some(config) => config,
+            None => {
+                return Outcome::Failure((
+                    Status::InternalServerError,
+                    anyhow!("Config was not mounted on the rocket"),
+                ))
+            }
+        };
+
+        let cookie = request.cookies().get_private(&config.auth_cookie_name);
 
         if let Some(cookie) = cookie {
             match serde_json::from_str::<OauthCookie>(cookie.value()) {
                 Ok(cookie) => {
                     // FIXME: Auto refresh if time is neigh
 
-                    let http = create_http_client(format!("Bearer {}", cookie.access_token));
+                    let http =
+                        create_http_client(format!("Bearer {}", cookie.access_token), config);
 
                     match http {
                         Ok(http) => Outcome::Success(OauthUser { http, auth: cookie }),
-                        Err(e) => Outcome::Failure((
-                            Status::InternalServerError,
-                            serde_json::Error::io(std::io::Error::new(ErrorKind::Other, e)),
-                        )),
+                        Err(e) => Outcome::Failure((Status::InternalServerError, e.into())),
                     }
                 }
-                Err(e) => Outcome::Failure((Status::BadRequest, e)),
+                Err(e) => Outcome::Failure((Status::BadRequest, e.into())),
             }
         } else {
             Outcome::Forward(())

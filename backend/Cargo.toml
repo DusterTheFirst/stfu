@@ -11,6 +11,8 @@ edition = "2018"
 anyhow = "1.0.33"
 askama = "0.10.3"
 async-std = { version = "1.6.5", features = ["tokio02", "attributes", "unstable"] }
+dotenv = "0.15.0"
+envy = "0.4.1"
 futures = "0.3.7"
 juniper = { branch = "master", git = "https://github.com/graphql-rust/juniper", default-features = false }
 juniper_rocket_async = { branch = "master", git = "https://github.com/graphql-rust/juniper" }
@@ -27,13 +29,17 @@ twilight-permission-calculator = { branch = "branding", git = "https://github.co
 twilight-model_v1 = { package = "twilight-model", version = "0.1" }
 twilight-oauth2 = { branch = "trunk", git = "https://github.com/twilight-rs/oauth2" }# TODO: merge to stable
 # FIXME: move to tagged release once viable
-twilight-cache-inmemory = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-client-builder-reqwest-client" }
-twilight-embed-builder = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-client-builder-reqwest-client" }
-twilight-gateway = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-client-builder-reqwest-client" }
-twilight-http = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-client-builder-reqwest-client" }
-twilight-mention = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-client-builder-reqwest-client" }
-twilight-model = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-client-builder-reqwest-client" }
-twilight-standby = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-client-builder-reqwest-client" }
+twilight-cache-inmemory = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-current-user-verified-optional" }
+twilight-embed-builder = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-current-user-verified-optional" }
+twilight-gateway = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-current-user-verified-optional" }
+twilight-http = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-current-user-verified-optional" }
+twilight-mention = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-current-user-verified-optional" }
+twilight-model = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-current-user-verified-optional" }
+twilight-standby = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-current-user-verified-optional" }
+
+[build-dependencies]
+anyhow = "1.0.33"
+regex = "1.4.1"
 
 [features]
 generate_schema = []

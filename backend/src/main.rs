@@ -10,18 +10,19 @@
 )]
 #![cfg_attr(feature = "generate_schema", allow(unused_imports))]
 
-use anyhow::Context;
 use async_std::{stream::StreamExt, task};
-use consts::{
-    oauth::{CLIENT_ID, REDIRECT_URL},
-    MITM_PROXY_URL,
-};
+use config::Config;
+use consts::OAUTH_REDIRECT_URLS;
+use dotenv::dotenv;
 use graphql::{create_schema, DiscordContext};
 use log::warn;
-use reqwest::{Certificate, Client as ReqwestClient, Proxy};
-use rocket::{figment::Figment, routes, Config};
+use reqwest::Client as ReqwestClient;
+use rocket::{
+    figment::{providers::Env, Figment},
+    routes,
+};
 // use rocket_cors::{Cors, CorsOptions};
-use std::{env, sync::Arc};
+use std::sync::Arc;
 use twilight_cache_inmemory::InMemoryCache;
 use twilight_gateway::shard::ShardBuilder;
 use twilight_http::{client::ClientBuilder as HttpClientBuilder, Client as HttpClient};
@@ -30,6 +31,7 @@ use twilight_model_v1::id::ApplicationId;
 use twilight_oauth2::Client as OauthClient;
 
 pub mod auth;
+pub mod config;
 pub mod consts;
 pub mod graphql;
 pub mod routes;
@@ -39,52 +41,51 @@ pub mod templates;
 compile_error!("You cannot have the `mitm_proxy` feature enabled in release mode");
 
 /// Helper function to create a pre-configured http client
-pub fn create_http_client(token: impl Into<String>) -> twilight_http::Result<HttpClient> {
+pub fn create_http_client(
+    token: impl Into<String>,
+    _config: &Config,
+) -> twilight_http::Result<HttpClient> {
     let builder = HttpClientBuilder::new().token(token);
 
-    if cfg!(feature = "mitm_proxy") {
+    #[cfg(feature = "mitm_proxy")]
+    {
         warn!("Creating a http client with a connection to mitm proxy");
 
         builder
-            .proxy(Proxy::all(MITM_PROXY_URL).unwrap())
-            .reqwest_client(reqwest::ClientBuilder::new().add_root_certificate(
-                Certificate::from_pem(include_bytes!("../mitmproxy-ca-cert.pem")).unwrap(),
-            ))
-    } else {
-        builder
+            .proxy(Proxy::all(_config.proxy_url).unwrap())
+            // .reqwest_client(reqwest::ClientBuilder::new().add_root_certificate(
+            //     Certificate::from_pem(include_bytes!("../mitmproxy-ca-cert.pem")).unwrap(),
+            // ))
+            .build()
     }
-    .build()
+
+    #[cfg(not(feature = "mitm_proxy"))]
+    builder.build()
 }
 
 #[cfg(not(feature = "generate_schema"))]
 #[async_std::main]
 async fn main() -> anyhow::Result<()> {
-    env::set_var(
-        "RUST_LOG",
-        "warn,_=info,launch=info,launch_=info,rocket=info,stfu_backend=trace",
-    );
+    dotenv().ok();
+
+    let config: Config = envy::from_env()?;
+
     pretty_env_logger::init();
 
-    let token = env::var("DISCORD_TOKEN")
-        .context("You must provide a DISCORD_TOKEN environment variable")?;
+    let http = create_http_client(&config.token, &config)?;
 
-    let client_secret = env::var("CLIENT_SECRET")
-        .context("You must provide a CLIENT_SECRET environment variable")?;
+    let oauth = {
+        let client_id = ApplicationId(http.current_user_application().await?.id.0);
 
-    // TODO: config?
-    let client_id = env::var("CLIENT_ID")
-        .map(|id| ApplicationId(id.parse().unwrap()))
-        .unwrap_or_else(|_| {
-            warn!("No CLIENT_ID environment variable provided, defaulting to client id in consts");
-            CLIENT_ID
-        });
-
-    let oauth = Arc::new(OauthClient::new(client_id, client_secret, &[REDIRECT_URL])?);
-
-    let http = create_http_client(&token)?;
+        Arc::new(OauthClient::new(
+            client_id,
+            &config.client_secret,
+            OAUTH_REDIRECT_URLS,
+        )?)
+    };
 
     let mut shard = ShardBuilder::new(
-        token,
+        &config.token,
         Intents::GUILDS
             | Intents::GUILD_VOICE_STATES
             | Intents::GUILD_MEMBERS
@@ -109,47 +110,44 @@ async fn main() -> anyhow::Result<()> {
         });
     }
 
-    rocket::custom(
-        Figment::from(Config::default())
-            .merge(("address", "0.0.0.0"))
-            .merge(("secret_key", include_bytes!("../cookie.key"))),
-    )
-    .manage(
-        ReqwestClient::builder()
-            .user_agent("Discord Bot: STFU")
-            .build()?,
-    )
-    .manage(DiscordContext {
-        cache,
-        http,
-        shard: shard.clone(),
-        oauth,
-    })
-    .manage(create_schema())
-    .mount(
-        "/",
-        routes![
-            routes::graphql::graphiql,
-            routes::graphql::graphiql_no_auth,
-            routes::graphql::get_graphql_handler,
-            routes::graphql::get_graphql_no_auth,
-            routes::graphql::post_graphql_handler,
-            routes::graphql::post_graphql_no_auth,
-            routes::auth::oauth_login,
-            routes::auth::oauth_authorize,
-            routes::auth::oauth_authorize_failure
-        ],
-    )
-    // .attach(
-    //     Cors::from_options(&CorsOptions {
-    //         // allow_credentials: true,
-    //         ..CorsOptions::default()
-    //     })
-    //     .context("Failed to setup cors")?,
-    // )
-    .launch()
-    .await
-    .ok(); // FIXME: Error handling, and json only responses
+    rocket::custom(Figment::from(rocket::Config::default()).merge(Env::prefixed("ROCKET")))
+        .manage(
+            ReqwestClient::builder()
+                .user_agent("Discord Bot: STFU")
+                .build()?,
+        )
+        .manage(DiscordContext {
+            cache,
+            http,
+            shard: shard.clone(),
+            oauth,
+        })
+        .manage(config.clone())
+        .manage(create_schema())
+        .mount(
+            "/",
+            routes![
+                routes::graphql::graphiql,
+                routes::graphql::graphiql_no_auth,
+                routes::graphql::get_graphql_handler,
+                routes::graphql::get_graphql_no_auth,
+                routes::graphql::post_graphql_handler,
+                routes::graphql::post_graphql_no_auth,
+                routes::auth::oauth_login,
+                routes::auth::oauth_authorize,
+                routes::auth::oauth_authorize_failure
+            ],
+        )
+        // .attach(
+        //     Cors::from_options(&CorsOptions {
+        //         // allow_credentials: true,
+        //         ..CorsOptions::default()
+        //     })
+        //     .context("Failed to setup cors")?,
+        // )
+        .launch()
+        .await
+        .ok(); // FIXME: Error handling, and json only responses
 
     // After server has shutdown
     shard.shutdown();

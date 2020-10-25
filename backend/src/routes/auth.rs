@@ -2,10 +2,12 @@
 
 #![allow(clippy::needless_pass_by_value)]
 
-use crate::{templates::HtmlRedirect, auth::OauthCookie, consts::{
-        oauth::{REDIRECT_URL, SCOPES},
-        AUTH_COOKIE_NAME,
-    }, graphql::DiscordContext};
+use std::borrow::Cow;
+
+use crate::{
+    auth::OauthCookie, config::Config, consts::OAUTH_SCOPES, graphql::DiscordContext,
+    templates::HtmlRedirect,
+};
 use anyhow::Context;
 use reqwest::{header::HeaderMap, Client as ReqwestClient};
 use rocket::{
@@ -18,12 +20,16 @@ use twilight_oauth2::{request::access_token_exchange::AccessTokenExchangeRespons
 
 /// The login route for the oauth authentication
 #[rocket::get("/oauth/login?<from>")]
-pub fn oauth_login(discord: State<DiscordContext>, from: Option<String>) -> Redirect {
+pub fn oauth_login(
+    discord: State<DiscordContext>,
+    config: State<Config>,
+    from: Option<String>,
+) -> Redirect {
     let authorization_url = discord
         .oauth
-        .authorization_url(REDIRECT_URL)
+        .authorization_url(&config.redirect_url)
         .unwrap()
-        .scopes(SCOPES)
+        .scopes(OAUTH_SCOPES)
         .prompt(Prompt::None)
         .state(&urlencoding::encode(
             &from.unwrap_or_else(|| "/".to_string()),
@@ -38,13 +44,14 @@ pub fn oauth_login(discord: State<DiscordContext>, from: Option<String>) -> Redi
 pub async fn oauth_authorize<'r>(
     discord: State<DiscordContext, 'r>,
     reqwest: State<ReqwestClient, 'r>,
+    config: State<Config, 'r>,
     code: String,
     state: &RawStr,
     cookies: &CookieJar<'r>,
 ) -> Result<HtmlRedirect, Debug<anyhow::Error>> {
     // FIXME: Better error page
     let mut request = discord.oauth.access_token_exchange(code.as_ref());
-    let request = request.scopes(SCOPES).build();
+    let request = request.scopes(OAUTH_SCOPES).build();
 
     let response =
         reqwest
@@ -68,7 +75,7 @@ pub async fn oauth_authorize<'r>(
         serde_json::from_str(&response).context("Failed to parse the response from the request")?;
 
     cookies.add_private(Cookie::new(
-        AUTH_COOKIE_NAME,
+        Cow::from(config.auth_cookie_name.clone()),
         serde_json::to_string(&OauthCookie::from(response))
             .context("Oauth cookie was unable to be serialized")?,
     ));
