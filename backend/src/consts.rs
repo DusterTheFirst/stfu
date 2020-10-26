@@ -15,6 +15,7 @@ pub const OAUTH_SCOPES: &[Scope] = &[Scope::Identify, Scope::Guilds];
 
 /// The oauth redirect urls that are allowed
 pub const OAUTH_REDIRECT_URLS: &[&str] = &[
+    "http://dev.stfu-backend.dtf.com:8000/oauth/authorize",
     "http://localhost:8000/oauth/authorize",
     "https://stfu-backend.dusterthefirst.com/oauth/authorize",
 ];

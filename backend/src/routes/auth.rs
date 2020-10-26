@@ -2,8 +2,6 @@
 
 #![allow(clippy::needless_pass_by_value)]
 
-use std::borrow::Cow;
-
 use crate::{
     auth::OauthCookie, config::Config, consts::OAUTH_SCOPES, graphql::DiscordContext,
     templates::HtmlRedirect,
@@ -11,6 +9,7 @@ use crate::{
 use anyhow::Context;
 use reqwest::{header::HeaderMap, Client as ReqwestClient};
 use rocket::{
+    http::SameSite,
     http::{Cookie, CookieJar, RawStr},
     response::Debug,
     response::{content::Html, Redirect},
@@ -28,7 +27,7 @@ pub fn oauth_login(
     let authorization_url = discord
         .oauth
         .authorization_url(&config.redirect_url)
-        .unwrap()
+        .expect("Redirect url is not one of the allowed")
         .scopes(OAUTH_SCOPES)
         .prompt(Prompt::None)
         .state(&urlencoding::encode(
@@ -50,7 +49,10 @@ pub async fn oauth_authorize<'r>(
     cookies: &CookieJar<'r>,
 ) -> Result<HtmlRedirect, Debug<anyhow::Error>> {
     // FIXME: Better error page
-    let mut request = discord.oauth.access_token_exchange(code.as_ref());
+    let mut request = discord
+        .oauth
+        .access_token_exchange(code.as_ref(), &config.redirect_url)
+        .unwrap();
     let request = request.scopes(OAUTH_SCOPES).build();
 
     let response =
@@ -67,6 +69,8 @@ pub async fn oauth_authorize<'r>(
             .send()
             .await
             .context("Failed to make request")?
+            .error_for_status()
+            .context("Received an error from the server")?
             .text()
             .await
             .context("Failed to read in response from request")?;
@@ -74,11 +78,16 @@ pub async fn oauth_authorize<'r>(
     let response: AccessTokenExchangeResponse =
         serde_json::from_str(&response).context("Failed to parse the response from the request")?;
 
-    cookies.add_private(Cookie::new(
-        Cow::from(config.auth_cookie_name.clone()),
-        serde_json::to_string(&OauthCookie::from(response))
-            .context("Oauth cookie was unable to be serialized")?,
-    ));
+    cookies.add_private(
+        Cookie::build(
+            config.auth_cookie_name.clone(),
+            serde_json::to_string(&OauthCookie::from(response))
+                .context("Oauth cookie was unable to be serialized")?,
+        )
+        .domain(config.auth_cookie_domain.clone())
+        .same_site(SameSite::Lax)
+        .finish(),
+    );
 
     Ok(HtmlRedirect {
         url: state.url_decode_lossy(),

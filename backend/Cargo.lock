@@ -1196,9 +1196,9 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "libc"
-version = "0.2.79"
+version = "0.2.80"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2448f6066e80e3bfc792e9c98bf705b4b0fc6e8ef5b43e5889aff0eaa9c58743"
+checksum = "4d58d1b70b004888f764dfbf6a26a3b0342a1632d33968e4a179d8011c760614"
 
 [[package]]
 name = "libz-sys"
@@ -1852,6 +1852,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "rocket_cors"
+version = "0.5.2"
+source = "git+https://github.com/dusterthefirst/rocket_cors?branch=fix-master-rocket#4107763bc83fd538765a26d7a22f88b1a1a3a5e9"
+dependencies = [
+ "log",
+ "regex",
+ "rocket",
+ "serde",
+ "serde_derive",
+ "unicase",
+ "unicase_serde",
+ "url",
+]
+
+[[package]]
 name = "rocket_http"
 version = "0.5.0-dev"
 source = "git+https://github.com/SergioBenitez/Rocket?branch=master#0c150c2a0ef07a94108e272dd545d40f0fe31c22"
@@ -2200,6 +2215,7 @@ dependencies = [
  "regex",
  "reqwest",
  "rocket",
+ "rocket_cors",
  "serde",
  "serde_json",
  "twilight-cache-inmemory",
@@ -2572,7 +2588,7 @@ dependencies = [
 [[package]]
 name = "twilight-oauth2"
 version = "0.1.0"
-source = "git+https://github.com/twilight-rs/oauth2?branch=trunk#7fc19e641ccd073642287d13e6cd7fc696fff21f"
+source = "git+https://github.com/dusterthefirst/oauth2?branch=fix-redirect-url-token-exchange#c62ca9362a9b6ff4823f391a6415e09980f27129"
 dependencies = [
  "serde",
  "twilight-model 0.1.4",
@@ -2632,6 +2648,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "50f37be617794602aabbeee0be4f259dc1778fabe05e2d67ee8f79326d5cb4f6"
 dependencies = [
  "version_check",
+]
+
+[[package]]
+name = "unicase_serde"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ef53697679d874d69f3160af80bc28de12730a985d57bdf2b47456ccb8b11f1"
+dependencies = [
+ "serde",
+ "unicase",
 ]
 
 [[package]]

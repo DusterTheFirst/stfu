@@ -19,7 +19,7 @@ use twilight_http::Client as HttpClient;
 use twilight_model::{
     channel::{self, permission_overwrite::PermissionOverwriteType, GuildChannel},
     id::{ChannelId, GuildId, UserId},
-    user::CurrentUser,
+    user,
     voice::VoiceState,
 };
 use twilight_oauth2::Client as OauthClient;
@@ -76,8 +76,44 @@ macro_rules! transparent_wrapper {
                 }
             }
             impl From<$wrapped> for $wrapper {
-                fn from(channel: $wrapped) -> Self {
-                    $wrapper(channel)
+                fn from(w: $wrapped) -> Self {
+                    $wrapper(w)
+                }
+            }
+        )*
+    };
+    (
+        $(
+            $(#[$outer:meta])*
+            pub struct $wrapper:ident($wrapped:ty);
+            use enum type $enum_name:ident::$variant:ident($var_wrapped:ty);
+        )*
+    ) => {
+        $(
+            #[derive(Clone, Debug)]
+            $(#[$outer])*
+            pub struct $wrapper($wrapped);
+
+            impl Deref for $wrapper {
+                type Target = $var_wrapped;
+
+                fn deref(&self) -> &Self::Target {
+                    if let $enum_name::$variant(w) = self.0.as_ref() {
+                        w
+                    } else {
+                        unreachable!()
+                    }
+                }
+            }
+            impl TryFrom<$wrapped> for $wrapper {
+                type Error = ();
+
+                fn try_from(w: $wrapped) -> Result<Self, Self::Error> {
+                    if let $enum_name::$variant(_) = w.as_ref() {
+                        Ok(Self(w))
+                    } else {
+                        Err(())
+                    }
                 }
             }
         )*
@@ -86,57 +122,57 @@ macro_rules! transparent_wrapper {
 
 // Create the wrapper types
 transparent_wrapper! {
-    /// A voice channel voice state
+    /// A voice channel voice state.
     pub struct VoiceChannelState(Arc<VoiceState>);
-    /// A discord channel category
-    pub struct CategoryChannel(channel::CategoryChannel);
-    /// A discord voice channel
-    pub struct VoiceChannel(channel::VoiceChannel);
-    /// A discord guild
+    /// A discord guild.
     pub struct Guild(Arc<CachedGuild>);
-    /// A discord guild member
+    /// A discord guild member.
     pub struct Member(Arc<CachedMember>);
-    /// The bots' user
-    pub struct Me(Arc<CurrentUser>);
+    /// A current user, either the bot or an oauth user.
+    pub struct CurrentUser(Arc<user::CurrentUser>);
 }
 
-// Create try from implementation for subtypes of enums
-impl TryFrom<Arc<GuildChannel>> for CategoryChannel {
-    type Error = ();
-
-    fn try_from(channel: Arc<GuildChannel>) -> Result<Self, Self::Error> {
-        match channel.as_ref() {
-            GuildChannel::Category(channel) => Ok(Self(channel.clone())),
-            _ => Err(()),
-        }
-    }
-}
-impl TryFrom<Arc<GuildChannel>> for VoiceChannel {
-    type Error = ();
-
-    fn try_from(channel: Arc<GuildChannel>) -> Result<Self, Self::Error> {
-        match channel.as_ref() {
-            GuildChannel::Voice(channel) => Ok(Self(channel.clone())),
-            _ => Err(()),
-        }
-    }
+// Create the wrapper types around enum variants
+transparent_wrapper! {
+    /// A discord channel category.
+    pub struct CategoryChannel(Arc<GuildChannel>);
+    use enum type GuildChannel::Category(channel::CategoryChannel);
+    /// A discord voice channel.
+    pub struct VoiceChannel(Arc<GuildChannel>);
+    use enum type GuildChannel::Voice(channel::VoiceChannel);
 }
 
 // Create juniper objects
+
 #[graphql_object(Context = GraphQLContext)]
+/// A member of a guild.
 impl Member {
-    fn avatar(&self) -> Option<&String> {
+    /// Avatar hash of the member. FIXME:
+    pub fn avatar(&self) -> Option<&String> {
         self.user.avatar.as_ref()
     }
+
+    /// Time the member joined the guild.
     fn joined_at(&self) -> Option<&String> {
         self.joined_at.as_ref()
     }
+
+    /// Member's server mute status.
     fn mute(&self) -> bool {
         self.mute
     }
+
+    /// Member's server deafened status.
+    fn deaf(&self) -> bool {
+        self.deaf
+    }
+
+    /// Member's nickname.
     fn nick(&self) -> &Option<String> {
         &self.nick
     }
+
+    /// Member's color, calculated from their highest, colored, role.
     fn color(&self, context: &GraphQLContext) -> FieldResult<Option<i32>> {
         let mut roles = self
             .roles
@@ -144,43 +180,67 @@ impl Member {
             .cloned()
             .filter_map(|role_id| context.discord.cache.role(role_id))
             .collect::<Vec<_>>();
+
         roles.sort_by_key(|role| role.position);
+
         Ok(roles.last().map(|role| role.color.try_into()).transpose()?)
     }
+
+    /// Member's discriminator.
     fn discriminator(&self) -> &str {
         self.user.discriminator.as_str()
     }
+
+    /// Member's unique identifier.
     fn id(&self) -> String {
         self.user.id.to_string()
     }
+
+    /// Member's discord username.
     fn name(&self) -> &str {
         self.user.name.as_str()
     }
+
+    /// Member's bot status.
     fn bot(&self) -> bool {
         self.user.bot
     }
 }
 
+/// State of a member in a voice channel.
 #[graphql_object(Context = GraphQLContext)]
 impl VoiceChannelState {
+    /// Id of the member who this voice state is about.
     fn id(&self) -> String {
         self.user_id.to_string()
     }
+
+    /// Server deafened status of the member.
     fn deaf(&self) -> bool {
         self.deaf
     }
+
+    /// Server mute status of the member.
     fn mute(&self) -> bool {
         self.mute
     }
+
+    /// Self deafened status of the member.
     fn self_deaf(&self) -> bool {
         self.self_deaf
     }
+
+    /// Self muted status of the member.
     fn self_mute(&self) -> bool {
         self.self_mute
     }
+
+    /// Channel id that this voice state is in.
     fn channel_id(&self) -> Option<String> {
         self.channel_id.map(|id| id.to_string())
     }
+
+    /// Member object associated with the voice state.
     fn member(&self, context: &GraphQLContext) -> FieldResult<Member> {
         Ok(context
             .discord
@@ -195,33 +255,49 @@ impl VoiceChannelState {
     }
 }
 
+/// A channel category for grouping channels.
 #[graphql_object]
 impl CategoryChannel {
+    /// Id of the category.
     fn id(&self) -> String {
         self.id.to_string()
     }
+
+    /// Name of the category.
     fn name(&self) -> &str {
         self.name.as_ref()
     }
+
+    /// Relative position of the category.
     fn position(&self) -> FieldResult<i32> {
         Ok(self.position.try_into()?)
     }
 }
 
+/// A voice channel in a guild.
 #[graphql_object(Context = GraphQLContext)]
 impl VoiceChannel {
+    /// Name of the voice channel.
     fn name(&self) -> &str {
         self.name.as_str()
     }
+
+    /// Unique id of the voice channel.
     fn id(&self) -> String {
         self.id.to_string()
     }
+
+    /// Maximum amount of users allowed in a channel.
     fn user_limit(&self) -> FieldResult<Option<i32>> {
         Ok(self.user_limit.map(i32::try_from).transpose()?)
     }
+
+    /// Relative position of the voice channel.
     fn position(&self) -> FieldResult<i32> {
         Ok(self.position.try_into()?)
     }
+
+    /// The parent channel category
     fn category(&self, context: &GraphQLContext) -> Option<CategoryChannel> {
         self.parent_id.and_then(|parent_id| {
             context
@@ -232,7 +308,7 @@ impl VoiceChannel {
         })
     }
 
-    /// If the bot can operate on the guild
+    /// If the bot can operate on the guild.
     fn can_operate(&self, context: &GraphQLContext) -> FieldResult<bool> {
         let guild_id = self.guild_id.context("Voice channel missing guild_id")?;
         let guild = context
@@ -268,6 +344,7 @@ impl VoiceChannel {
             .member(guild_id, bot_user.id)
             .context("The bot was unable to get information on itself in the guild")?;
 
+        // FIXME: On release of v2 to stable
         let permissions = Calculator::new(
             model_v1::GuildId::from(guild_id.0),
             model_v1::UserId::from(guild.owner_id.0),
@@ -317,6 +394,7 @@ impl VoiceChannel {
         Ok(permissions.contains(REQUIRED_PERMISSIONS))
     }
 
+    /// Voice channel states in this voice channel.
     fn states(&self, context: &GraphQLContext) -> Vec<VoiceChannelState> {
         context
             .discord
@@ -329,22 +407,23 @@ impl VoiceChannel {
     }
 }
 
-/// A discord guild
+/// A discord guild.
 #[graphql_object(Context = GraphQLContext)]
 impl Guild {
-    /// The guilds snowflake id
+    /// Guild's snowflake id.
     fn id(&self) -> String {
         self.id.to_string()
     }
-    /// The guild name
+    /// Guild's name.
     fn name(&self) -> &str {
         self.name.as_str()
     }
-    /// Weather or not the guild is unavailable
+    /// Weather or not the guild is unavailable.
     fn unavailable(&self) -> bool {
         self.unavailable
     }
-    /// The snowflake id of the owner of the guild
+
+    /// Guild member object of the owner of the guild.
     fn owner(&self, context: &GraphQLContext) -> FieldResult<Member> {
         Ok(context
             .discord
@@ -353,15 +432,17 @@ impl Guild {
             .context("The guild owner was not found in the cache")?
             .into())
     }
-    /// The icon of the guild
+
+    /// Icon hash of the guild.
     fn icon(&self) -> Option<&String> {
         self.icon.as_ref()
     }
-    /// The banner of the guild
+    /// Banner hash of the guild.
     fn banner(&self) -> Option<&String> {
         self.banner.as_ref()
     }
-    /// Get the voice channels in the guild
+
+    /// Voice channels in the guild.
     fn voice_channels(&self, context: &GraphQLContext) -> Vec<VoiceChannel> {
         context
             .discord
@@ -380,7 +461,9 @@ impl Guild {
             })
             .unwrap_or_default()
     }
-    /// Get a specific voice channel in the guild
+
+    /// A specific voice channel in the guild.
+    #[graphql(arguments(id(description = "Id of the voice channel to fetch")))]
     fn voice_channel(
         &self,
         context: &GraphQLContext,
@@ -392,6 +475,8 @@ impl Guild {
             .guild_channel(ChannelId(id.parse().context("Invalid channel id")?))
             .and_then(|c| c.try_into().ok()))
     }
+
+    /// All the members in the guild.
     fn members(&self, context: &GraphQLContext) -> Vec<Member> {
         context
             .discord
@@ -410,6 +495,8 @@ impl Guild {
             })
             .unwrap_or_default()
     }
+
+    /// A specific member in the guild.
     fn member(&self, context: &GraphQLContext, id: String) -> FieldResult<Option<Member>> {
         Ok(context
             .discord
@@ -417,35 +504,56 @@ impl Guild {
             .member(self.id, UserId(id.parse().context("Invalid user id")?))
             .map(|member| member.into()))
     }
-    async fn me(&self, context: &GraphQLContext) -> FieldResult<Option<Member>> {
+
+    /// The current logged in user as a member of the guild.
+    async fn me(&self, context: &GraphQLContext) -> FieldResult<Member> {
         Ok(context
             .discord
             .cache
             .member(self.id, context.user.http.current_user().await?.id)
-            .map(|member| member.into()))
+            .map(|member| member.into())
+            .context("Failed to lookup current user in cache")?)
     }
 }
 
+/// A current user object, different from a member since it is detached from a guild.
 #[graphql_object]
-impl Me {
+impl CurrentUser {
+    /// Discord username of the user.
     fn name(&self) -> &str {
         &self.name
     }
+
+    /// Unique identifying id of the user.
     fn id(&self) -> String {
         self.id.to_string()
     }
+
+    /// Discriminator of the user.
     fn discriminator(&self) -> &str {
         &self.discriminator
+    }
+
+    /// If the user has multi-factor authentication enabled
+    fn mfa(&self) -> bool {
+        self.mfa_enabled
+    }
+
+    /// User's avatar hash.
+    fn avatar(&self) -> Option<&String> {
+        self.avatar.as_ref()
     }
 }
 
 #[derive(Copy, Clone, Debug)]
-/// The root object for GraphQL queries
+/// The root object for GraphQL queries.
 pub struct QueryRoot;
 
+/// The root object for GraphQL queries.
 #[graphql_object(Context = GraphQLContext)]
 impl QueryRoot {
-    /// Get a guild by id
+    /// Get a guild by id.
+    #[graphql(arguments(id(description = "Id of the guild to fetch")))]
     fn guild(context: &GraphQLContext, id: String) -> FieldResult<Option<Guild>> {
         Ok(context
             .discord
@@ -453,6 +561,8 @@ impl QueryRoot {
             .guild(GuildId(id.parse().context("Invalid guild id")?))
             .map(|g| g.into()))
     }
+
+    /// Get the intersection of guilds between the logged in user and the bot.
     async fn shared_guilds(context: &GraphQLContext) -> FieldResult<Vec<Guild>> {
         let bot_guilds = context
             .discord
@@ -478,8 +588,9 @@ impl QueryRoot {
             .filter_map(|id| context.discord.cache.guild(id).map(|guild| guild.into()))
             .collect())
     }
-    /// Get information about the bot user
-    fn bot(&self, context: &GraphQLContext) -> FieldResult<Me> {
+
+    /// Get information about the bot user.
+    fn bot(&self, context: &GraphQLContext) -> FieldResult<CurrentUser> {
         Ok(context
             .discord
             .cache
@@ -487,18 +598,36 @@ impl QueryRoot {
             .context("Unable to get information on the bot user from the cache")?
             .into())
     }
-    // TODO: ME as in logged in users
-    async fn me(&self, context: &GraphQLContext) -> FieldResult<String> {
-        Ok(context.user.http.current_user().await?.id.to_string()) // FIXME:
+
+    /// Get information about the logged in oauth user.
+    async fn me(&self, context: &GraphQLContext) -> FieldResult<CurrentUser> {
+        Ok(Arc::new(
+            context
+                .user
+                .http
+                .current_user()
+                .await
+                .context("Unable to get information on the current oauth user")?,
+        )
+        .into())
     }
 }
 
 #[derive(Copy, Clone, Debug)]
-/// The root object for GraphQL mutations
+/// The root object for GraphQL mutations.
 pub struct MutationRoot;
 
+/// The root object for GraphQL mutations.
 #[graphql_object(Context = GraphQLContext)]
 impl MutationRoot {
+    /// Mute all users in a voice channel.
+    ///
+    /// # Returns
+    /// Id's of users who were successfully muted
+    #[graphql(arguments(
+        guild_id(description = "Id of the guild that the channel resides in",),
+        channel_id(description = "Id of the channel to mutate",),
+    ))]
     async fn mute(
         guild_id: String,
         channel_id: String,
@@ -511,6 +640,15 @@ impl MutationRoot {
             .await
             .map(|ids| ids.into_iter().map(|id| id.to_string()).collect())
     }
+
+    /// Unmute all users in a voice channel.
+    ///
+    /// # Returns
+    /// Id's of users who were successfully un-muted
+    #[graphql(arguments(
+        guild_id(description = "Id of the guild that the channel resides in",),
+        channel_id(description = "Id of the channel to mutate",),
+    ))]
     async fn unmute(
         guild_id: String,
         channel_id: String,
@@ -523,14 +661,6 @@ impl MutationRoot {
             .await
             .map(|ids| ids.into_iter().map(|id| id.to_string()).collect())
     }
-    // fn create_human(new_human: NewHuman) -> FieldResult<Human> {
-    //     Ok(Human {
-    //         id: "1234".to_owned(),
-    //         name: new_human.name,
-    //         appears_in: new_human.appears_in,
-    //         home_planet: new_human.home_planet,
-    //     })
-    // }
 }
 
 async fn mass_update_voice_state(

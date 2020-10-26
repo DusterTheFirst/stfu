@@ -1,7 +1,8 @@
 import React from "react";
-import { HashRouter as Router, Link, Route, Switch } from "react-router-dom";
+import { HashRouter as Router, Route, Switch } from "react-router-dom";
 import Channel from "./routes/Channel";
 import Guild from "./routes/Guild";
+import Overview from "./routes/Overview";
 
 /** The main entry point for the app */
 function App() {
@@ -18,16 +19,7 @@ function App() {
                         <Channel />
                     </Route>
                     <Route path="/" exact={true}>
-                        <div>
-                            <div>/ Home</div>
-
-                            whats poppin
-
-                            <div>
-                                <input type="text" value={"708811110928744578"} />
-                                <Link to={"/708811110928744578"}>Go to guild</Link>
-                            </div>
-                        </div>
+                        <Overview />
                     </Route>
                     <Route path="*">
                         <pre>404</pre>

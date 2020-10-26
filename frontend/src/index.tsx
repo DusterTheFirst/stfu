@@ -9,6 +9,10 @@ import { GlobalStyle } from "./style";
 /** The client to use for apollo */
 const CLIENT = new ApolloClient({
     cache: new InMemoryCache(),
+    credentials: "include",
+    headers: {
+        Accept: "application/json"
+    },
     name: "stfu",
     uri: BACKEND_GRAPHQL_URL
 });

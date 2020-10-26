@@ -14,6 +14,8 @@ pub struct Config {
     pub redirect_url: String,
     /// Name of the authentication cookie
     pub auth_cookie_name: String,
+    /// Domain to set the auth cookie for
+    pub auth_cookie_domain: String,
     /// Proxy url to use
     #[cfg(feature = "mitm_proxy")]
     pub proxy_url: String,

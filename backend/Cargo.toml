@@ -7,7 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# rocket_cors = { branch = "master", git = "https://github.com/lawliet89/rocket_cors" }
+rocket_cors = { branch = "fix-master-rocket", git = "https://github.com/dusterthefirst/rocket_cors" }
 anyhow = "1.0.33"
 askama = "0.10.3"
 async-std = { version = "1.6.5", features = ["tokio02", "attributes", "unstable"] }
@@ -27,8 +27,17 @@ urlencoding = "1.1.1"
 # Twilight mess
 twilight-permission-calculator = { branch = "branding", git = "https://github.com/dusterthefirst/permission-calculator" }
 twilight-model_v1 = { package = "twilight-model", version = "0.1" }
-twilight-oauth2 = { branch = "trunk", git = "https://github.com/twilight-rs/oauth2" }# TODO: merge to stable
+twilight-oauth2 = { branch = "fix-redirect-url-token-exchange", git = "https://github.com/dusterthefirst/oauth2" }# TODO: merge to stable
 # FIXME: move to tagged release once viable
+twilight-cache-inmemory = "0.2.0-beta"
+twilight-embed-builder = "0.2.0-beta"
+twilight-gateway = "0.2.0-beta"
+twilight-http = "0.2.0-beta"
+twilight-mention = "0.2.0-beta"
+twilight-model = "0.2.0-beta"
+twilight-standby = "0.2.0-beta"
+
+[patch.crates-io]
 twilight-cache-inmemory = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-current-user-verified-optional" }
 twilight-embed-builder = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-current-user-verified-optional" }
 twilight-gateway = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-current-user-verified-optional" }
@@ -36,6 +45,14 @@ twilight-http = { git = "https://github.com/DusterTheFirst/twilight", branch = "
 twilight-mention = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-current-user-verified-optional" }
 twilight-model = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-current-user-verified-optional" }
 twilight-standby = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-current-user-verified-optional" }
+
+# twilight-cache-inmemory = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-client-builder-reqwest-client" }
+# twilight-embed-builder = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-client-builder-reqwest-client" }
+# twilight-gateway = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-client-builder-reqwest-client" }
+# twilight-http = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-client-builder-reqwest-client" }
+# twilight-mention = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-client-builder-reqwest-client" }
+# twilight-model = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-client-builder-reqwest-client" }
+# twilight-standby = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-client-builder-reqwest-client" }
 
 [build-dependencies]
 anyhow = "1.0.33"

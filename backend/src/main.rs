@@ -10,6 +10,7 @@
 )]
 #![cfg_attr(feature = "generate_schema", allow(unused_imports))]
 
+use anyhow::Context;
 use async_std::{stream::StreamExt, task};
 use config::Config;
 use consts::OAUTH_REDIRECT_URLS;
@@ -19,9 +20,10 @@ use log::warn;
 use reqwest::Client as ReqwestClient;
 use rocket::{
     figment::{providers::Env, Figment},
+    http::Method,
     routes,
 };
-// use rocket_cors::{Cors, CorsOptions};
+use rocket_cors::CorsOptions;
 use std::sync::Arc;
 use twilight_cache_inmemory::InMemoryCache;
 use twilight_gateway::shard::ShardBuilder;
@@ -40,7 +42,7 @@ pub mod templates;
 #[cfg(all(feature = "mitm_proxy", not(debug_assertions)))]
 compile_error!("You cannot have the `mitm_proxy` feature enabled in release mode");
 
-/// Helper function to create a pre-configured http client
+/// Helper function to create a pre-configured discord http client
 pub fn create_http_client(
     token: impl Into<String>,
     _config: &Config,
@@ -52,15 +54,45 @@ pub fn create_http_client(
         warn!("Creating a http client with a connection to mitm proxy");
 
         builder
-            .proxy(Proxy::all(_config.proxy_url).unwrap())
-            // .reqwest_client(reqwest::ClientBuilder::new().add_root_certificate(
-            //     Certificate::from_pem(include_bytes!("../mitmproxy-ca-cert.pem")).unwrap(),
-            // ))
+            .proxy(reqwest::Proxy::all(&_config.proxy_url).expect("Proxy url was malformed"))
+            .reqwest_client(
+                reqwest::ClientBuilder::new().add_root_certificate(
+                    reqwest::Certificate::from_pem(
+                        std::fs::read(&_config.proxy_cert_path)
+                            .expect("Failed to read in proxy cert")
+                            .as_slice(),
+                    )
+                    .expect("Certificate was in an invalid format"),
+                ),
+            )
             .build()
     }
 
     #[cfg(not(feature = "mitm_proxy"))]
     builder.build()
+}
+
+/// Helper function to create a pre-configured reqwest client
+pub fn create_reqwest_client(_config: &Config) -> reqwest::Result<ReqwestClient> {
+    #[cfg(feature = "mitm_proxy")]
+    {
+        warn!("Creating a http client with a connection to mitm proxy");
+
+        ReqwestClient::builder()
+            .proxy(reqwest::Proxy::all(&_config.proxy_url).expect("Proxy url was malformed"))
+            .add_root_certificate(
+                reqwest::Certificate::from_pem(
+                    std::fs::read(&_config.proxy_cert_path)
+                        .expect("Failed to read in proxy cert")
+                        .as_slice(),
+                )
+                .expect("Certificate was in an invalid format"),
+            )
+            .build()
+    }
+
+    #[cfg(not(feature = "mitm_proxy"))]
+    Ok(ReqwestClient::new())
 }
 
 #[cfg(not(feature = "generate_schema"))]
@@ -111,11 +143,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     rocket::custom(Figment::from(rocket::Config::default()).merge(Env::prefixed("ROCKET")))
-        .manage(
-            ReqwestClient::builder()
-                .user_agent("Discord Bot: STFU")
-                .build()?,
-        )
+        .manage(create_reqwest_client(&config)?)
         .manage(DiscordContext {
             cache,
             http,
@@ -138,16 +166,23 @@ async fn main() -> anyhow::Result<()> {
                 routes::auth::oauth_authorize_failure
             ],
         )
-        // .attach(
-        //     Cors::from_options(&CorsOptions {
-        //         // allow_credentials: true,
-        //         ..CorsOptions::default()
-        //     })
-        //     .context("Failed to setup cors")?,
-        // )
+        .attach(
+            CorsOptions {
+                allow_credentials: true,
+                allowed_methods: [Method::Get, Method::Post]
+                    .iter()
+                    .cloned()
+                    .map(rocket_cors::Method::from)
+                    .collect(),
+                // allowed_origins: AllOrSome::Some(()),
+                ..CorsOptions::default()
+            }
+            .to_cors()
+            .context("Failed to setup cors")?,
+        )
         .launch()
         .await
-        .ok(); // FIXME: Error handling, and json only responses
+        .ok(); // FIXME: Error handling
 
     // After server has shutdown
     shard.shutdown();
@@ -194,10 +229,11 @@ async fn main() {
     .unwrap();
 
     let mut file = std::fs::File::create(format!(
-        "{}/../target/graphql.json",
+        "{}/target/graphql.json",
         env!("CARGO_MANIFEST_DIR")
     ))
     .unwrap();
+
     std::io::Write::write(
         &mut file,
         serde_json::to_string_pretty(&res).unwrap().as_bytes(),
