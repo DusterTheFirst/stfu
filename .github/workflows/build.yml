@@ -23,10 +23,12 @@ jobs:
       - name: rust-clippy-check
         uses: actions-rs/clippy-check@v1
         with:
+          args: --manifest-path backend/Cargo.toml
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: rust-rustfmt-check
         uses: mbrobbel/rustfmt-check@0.3.0
         with:
+          args: --manifest-path backend/Cargo.toml
           token:  ${{ secrets.GITHUB_TOKEN }}
 
       - name: Yarn Install
