@@ -34,12 +34,6 @@ const GET_SHARED_GUILDS = gql`
     }
 `;
 
-/** The parameters for the guild url */
-interface IParams {
-    /** The guild id to view */
-    guild_id: string;
-}
-
 /** The page for guild information */
 export default function Overview() {
     const { loading, error, data, refetch } = useQuery<GetSharedGuilds>(GET_SHARED_GUILDS, { notifyOnNetworkStatusChange: true });
@@ -61,7 +55,7 @@ export default function Overview() {
         return (
             <>
                 {loading ? <LoadingIcon /> : undefined}
-                <GuildInfo guilds={guilds} refetch={refetch_no_await} />
+                <GuildsInfo guilds={guilds} refetch={refetch_no_await} />
                 <pre>
                     {JSON.stringify(data, undefined, 4)}
                 </pre>
@@ -71,18 +65,18 @@ export default function Overview() {
 }
 
 /** The props for the GuildInfo component */
-interface IGuildInfoProps {
+interface IGuildsInfoProps {
     /** The guilds to view */
-    guilds: GetSharedGuilds_sharedGuilds[];
+    guilds: Readonly<GetSharedGuilds_sharedGuilds[]>;
     /** The refresh function to query a refresh */
     refetch(): void;
 }
 
 /** The view into the information of the guild */
-function GuildInfo({ guilds, refetch }: IGuildInfoProps) {
+function GuildsInfo({ guilds, refetch }: IGuildsInfoProps) {
     return (
         <div>
-            <div>/ <Link to="/">Home</Link></div>
+            <div>/ Home</div>
             <button onClick={refetch}>Refresh</button>
             <table>
                 <thead>
@@ -96,9 +90,9 @@ function GuildInfo({ guilds, refetch }: IGuildInfoProps) {
                     </tr>
                 </thead>
                 <tbody>
-                    {guilds.map((guild, i) => (
-                        <tr key={i}>
-                            <td>{guild.name}</td>
+                    {[...guilds].sort((a, b) => a.name.localeCompare(b.name)).map((guild) => (
+                        <tr key={guild.id}>
+                            <td><Link to={`/${guild.id}`}>{guild.name}</Link></td>
                             <td><img src={getGuildIcon(guild)} alt="Guild icon" /></td>
                             <td>{guild.id}</td>
                             <td style={{ color: `#${guild.owner.color === null ? "000000" : guild.owner.color.toString(16)}`, fontWeight: "bold" }}>{guild.owner.nick === null ? guild.owner.name : guild.owner.nick}#{guild.owner.discriminator}</td>

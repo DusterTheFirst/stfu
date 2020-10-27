@@ -1,5 +1,6 @@
-import { ApolloError } from "@apollo/client";
+import { ApolloError, ServerError } from "@apollo/client";
 import React from "react";
+import { BACKEND_DOMAIN } from "../constants";
 
 /** The props sent to the error screen */
 interface IErrorScreenProps {
@@ -10,23 +11,22 @@ interface IErrorScreenProps {
 }
 
 /** A full screen error */
-export default function ErrorScreen({refetch, error}: IErrorScreenProps) {
-    // if (error.networkError?.message = ) {
-    //     return (
-    //         <div>
-    //             <h1>Network Error :(</h1>
-    //             <p>Make sure you are connected to the internet</p>
-    //             <p>If the issue persists, the backend may be offline</p>
-    //             <button onClick={refetch_no_await}>Retry</button>
-    //         </div>
-    //     );
-    // } else {
-    return (
-        <div>
-            <h1>Error :(</h1>
-            <button onClick={refetch}>Retry</button>
-            <pre>{JSON.stringify(error, undefined, 4)}</pre>
-        </div>
-    );
-    // }
+export default function ErrorScreen({ refetch, error }: IErrorScreenProps) {
+    if (error.networkError !== null && (error.networkError as Partial<ServerError>).statusCode === 401) {
+        return (
+            <div>
+                <h1>Unauthenticated</h1>
+                <p>You have to log in to access this page</p>
+                <a href={`//${BACKEND_DOMAIN}/oauth/login?from=${encodeURIComponent(window.location.href)}`}>Login</a>
+            </div>
+        );
+    } else {
+        return (
+            <div>
+                <h1>Error :(</h1>
+                <button onClick={refetch}>Retry</button>
+                <pre>{JSON.stringify(error, undefined, 4)}</pre>
+            </div>
+        );
+    }
 }

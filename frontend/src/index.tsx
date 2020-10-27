@@ -1,4 +1,5 @@
 import { ApolloClient, ApolloProvider, InMemoryCache } from "@apollo/client";
+import hash from "object-hash";
 import React from "react";
 import ReactDOM from "react-dom";
 import App from "./App";
@@ -8,7 +9,9 @@ import { GlobalStyle } from "./style";
 
 /** The client to use for apollo */
 const CLIENT = new ApolloClient({
-    cache: new InMemoryCache(),
+    cache: new InMemoryCache({
+        dataIdFromObject: o => hash(o), // tslint:disable-line: no-unnecessary-callback-wrapper
+    }),
     credentials: "include",
     headers: {
         Accept: "application/json"
