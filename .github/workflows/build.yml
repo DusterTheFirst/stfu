@@ -75,7 +75,7 @@ jobs:
       - uses: actions/download-artifact@v2
         with:
           name: graphql-schema
-          path: backend/target/graphql.json
+          path: backend/target/
       - name: Build Frontend Schema
         run: just build-schema-frontend
       
