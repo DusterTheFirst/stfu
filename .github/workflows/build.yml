@@ -32,9 +32,8 @@ jobs:
           args: --manifest-path backend/Cargo.toml
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - run: yarn global add apollo
       - name: Build Backend Schema
-        run: just build-schema
+        run: just build-schema-backend
 
       - name: Upload graphql schema artifact
         uses: actions/upload-artifact@v2
@@ -55,8 +54,8 @@ jobs:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GHCR_TOKEN }}
-      - run: docker build --pull --rm -f "backend/Dockerfile" -t stfu:latest "backend"
-      - run: docker push stfu:latest
+      - run: docker build --pull --rm -f "backend/Dockerfile" -t ghcr.io/dusterthefirst/stfu:latest "backend"
+      - run: docker push ghcr.io/dusterthefirst/stfu:latest
   frontend:
     needs: backend
     runs-on: ubuntu-latest
@@ -74,6 +73,8 @@ jobs:
         with:
           name: graphql-schema
           path: backend/target/graphql.json
+      - name: Build Frontend Schema
+        run: just build-schema-frontend
       
       - name: Yarn Build
         working-directory: frontend

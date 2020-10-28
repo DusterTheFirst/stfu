@@ -1,6 +1,10 @@
-build-schema:
-	cd backend &&cargo run --features=generate_schema
+build-schema-backend:
+	cd backend && cargo run --features=generate_schema
+
+build-schema-frontend:
 	just yarn-run codegen
+
+build-schema: build-schema-backend build-schema-frontend
 
 clean-schema:
 	find . -type d -name __generated__ -prune -exec echo {} \;
