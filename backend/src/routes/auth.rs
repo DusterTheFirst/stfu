@@ -53,25 +53,26 @@ pub async fn oauth_authorize<'r>(
         .unwrap();
     let request = request.scopes(OAUTH_SCOPES).build();
 
-    let response =
-        reqwest_client
-            .post(&request.url())
-            .headers(request.headers.iter().fold(
-                HeaderMap::new(),
-                |mut map, (header, value)| {
+    let response = reqwest_client
+        .post(&request.url())
+        .headers(
+            request
+                .headers
+                .iter()
+                .fold(HeaderMap::new(), |mut map, (header, value)| {
                     map.append(*header, value.parse().unwrap());
                     map
-                },
-            ))
-            .form(&request.body)
-            .send()
-            .await
-            .context("Failed to make request")?
-            .error_for_status()
-            .context("Received an error from the server")?
-            .text()
-            .await
-            .context("Failed to read in response from request")?;
+                }),
+        )
+        .form(&request.body)
+        .send()
+        .await
+        .context("Failed to make request")?
+        .error_for_status()
+        .context("Received an error from the server")?
+        .text()
+        .await
+        .context("Failed to read in response from request")?;
 
     let response: AccessTokenExchangeResponse =
         serde_json::from_str(&response).context("Failed to parse the response from the request")?;
