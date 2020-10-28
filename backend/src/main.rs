@@ -181,8 +181,7 @@ async fn main() -> anyhow::Result<()> {
             .context("Failed to setup cors")?,
         )
         .launch()
-        .await
-        .ok(); // FIXME: Error handling
+        .await?; // FIXME: Error handling
 
     // After server has shutdown
     shard.shutdown();
