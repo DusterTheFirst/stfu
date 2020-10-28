@@ -32,6 +32,7 @@ jobs:
           args: --manifest-path backend/Cargo.toml
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - run: yarn install --global apollo
       - name: Build Backend Schema
         run: just build-schema
 
