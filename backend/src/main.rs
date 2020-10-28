@@ -43,10 +43,7 @@ pub mod templates;
 compile_error!("You cannot have the `mitm_proxy` feature enabled in release mode");
 
 /// Helper function to create a pre-configured discord http client
-pub fn create_http_client(
-    token: impl Into<String>,
-    _config: &Config,
-) -> twilight_http::Result<HttpClient> {
+pub fn create_http_client(token: impl Into<String>, _config: &Config) -> HttpClient {
     let builder = HttpClientBuilder::new().token(token);
 
     #[cfg(feature = "mitm_proxy")]
@@ -66,14 +63,16 @@ pub fn create_http_client(
                 ),
             )
             .build()
+            .unwrap()
     }
 
     #[cfg(not(feature = "mitm_proxy"))]
-    builder.build()
+    builder.build().unwrap()
 }
 
 /// Helper function to create a pre-configured reqwest client
-pub fn create_reqwest_client(_config: &Config) -> reqwest::Result<ReqwestClient> {
+#[must_use = "The created client must be used"]
+pub fn create_reqwest_client(_config: &Config) -> ReqwestClient {
     #[cfg(feature = "mitm_proxy")]
     {
         warn!("Creating a http client with a connection to mitm proxy");
@@ -89,10 +88,11 @@ pub fn create_reqwest_client(_config: &Config) -> reqwest::Result<ReqwestClient>
                 .expect("Certificate was in an invalid format"),
             )
             .build()
+            .unwrap()
     }
 
     #[cfg(not(feature = "mitm_proxy"))]
-    Ok(ReqwestClient::new())
+    ReqwestClient::new()
 }
 
 #[cfg(not(feature = "generate_schema"))]
@@ -104,7 +104,7 @@ async fn main() -> anyhow::Result<()> {
 
     pretty_env_logger::init();
 
-    let http = create_http_client(&config.token, &config)?;
+    let http = create_http_client(&config.token, &config);
 
     let oauth = {
         let client_id = ApplicationId(http.current_user_application().await?.id.0);
@@ -143,7 +143,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     rocket::custom(Figment::from(rocket::Config::default()).merge(Env::prefixed("ROCKET")))
-        .manage(create_reqwest_client(&config)?)
+        .manage(create_reqwest_client(&config))
         .manage(DiscordContext {
             cache,
             http,
@@ -163,7 +163,9 @@ async fn main() -> anyhow::Result<()> {
                 routes::graphql::post_graphql_no_auth,
                 routes::auth::oauth_login,
                 routes::auth::oauth_authorize,
-                routes::auth::oauth_authorize_failure
+                routes::auth::oauth_authorize_failure,
+                routes::auth::oauth_logout,
+                routes::auth::oauth_logout_not_logged_in
             ],
         )
         .attach(

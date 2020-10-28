@@ -36,7 +36,7 @@ const GET_SHARED_GUILDS = gql`
 
 /** The page for guild information */
 export default function Overview() {
-    const { loading, error, data, refetch } = useQuery<GetSharedGuilds>(GET_SHARED_GUILDS, { notifyOnNetworkStatusChange: true });
+    const { loading, error, data, refetch } = useQuery<GetSharedGuilds>(GET_SHARED_GUILDS, { notifyOnNetworkStatusChange: true, pollInterval: 60000, });
     const refetch_no_await = () => { refetch().catch((e) => console.error(e)); };
 
     if (loading && data === undefined) {

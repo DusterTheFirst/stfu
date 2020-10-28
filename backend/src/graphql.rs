@@ -546,7 +546,7 @@ impl CurrentUser {
 }
 
 #[derive(Copy, Clone, Debug)]
-/// The root object for GraphQL queries.
+/// The root object for `GraphQL` queries.
 pub struct QueryRoot;
 
 /// The root object for GraphQL queries.
@@ -614,7 +614,7 @@ impl QueryRoot {
 }
 
 #[derive(Copy, Clone, Debug)]
-/// The root object for GraphQL mutations.
+/// The root object for `GraphQL` mutations.
 pub struct MutationRoot;
 
 /// The root object for GraphQL mutations.
@@ -675,20 +675,20 @@ async fn mass_update_voice_state(
         for chunk in states.chunks(10) {
             let send_muted = send_muted.clone();
 
-            join_all(chunk.into_iter().map(move |state| {
+            join_all(chunk.iter().map(move |state| {
                 let send_muted = send_muted.clone();
 
                 async move {
-                    if state.mute != mute {
-                        if let Ok(_) = context
+                    if state.mute != mute
+                        && context
                             .discord
                             .http
                             .update_guild_member(guild_id, state.user_id)
                             .mute(mute)
                             .await
-                        {
-                            send_muted.send(state.user_id).ok();
-                        }
+                            .is_ok()
+                    {
+                        send_muted.send(state.user_id).ok();
                     }
                 }
             }))
@@ -704,7 +704,7 @@ async fn mass_update_voice_state(
 /// The graphql schema described in this file
 pub type Schema = RootNode<'static, QueryRoot, MutationRoot, EmptySubscription<GraphQLContext>>;
 
-/// Create the GraphQL schema described in this file
+/// Create the `GraphQL` schema described in this file
 #[must_use = "You need to do something with the schema you have created"]
 pub fn create_schema() -> Schema {
     Schema::new(QueryRoot, MutationRoot, EmptySubscription::new())

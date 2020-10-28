@@ -1,5 +1,6 @@
 import React from "react";
 import { HashRouter as Router, Route, Switch } from "react-router-dom";
+import { BACKEND_DOMAIN } from "./constants";
 import Channel from "./routes/Channel";
 import Guild from "./routes/Guild";
 import Overview from "./routes/Overview";
@@ -9,6 +10,8 @@ function App() {
     return (
         <Router>
             <div>
+                <a href={`//${BACKEND_DOMAIN}/oauth/logout?from=${encodeURIComponent(window.location.href)}`}>Logout</a>
+
                 {/* A <Switch> looks through its children <Route>s and
             renders the first one that matches the current URL. */}
                 <Switch>

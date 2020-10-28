@@ -64,7 +64,7 @@ interface IParams {
 /** The page for guild information */
 export default function Guild() {
     const { guild_id } = useParams<IParams>();
-    const { loading, error, data, refetch } = useQuery<GetGuild, GetGuildVariables>(GET_GUILD, { variables: { guild_id }, notifyOnNetworkStatusChange: true });
+    const { loading, error, data, refetch } = useQuery<GetGuild, GetGuildVariables>(GET_GUILD, { variables: { guild_id }, notifyOnNetworkStatusChange: true, pollInterval: 60000 });
     const refetch_no_await = () => { refetch().catch((e) => console.error(e)); };
 
     if (loading && data === undefined) {
@@ -213,7 +213,7 @@ function GuildInfo({ guild, refetch }: IGuildInfoProps) {
                     </tr>
                     <tr>
                         <td>Guild icon:</td>
-                        <td><img src={getGuildIcon(guild)} alt="Guild icon"/></td>
+                        <td><img src={getGuildIcon(guild)} alt="Guild icon" /></td>
                     </tr>
                 </tbody>
             </table>

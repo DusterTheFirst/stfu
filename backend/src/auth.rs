@@ -83,13 +83,10 @@ impl<'a, 'r> FromRequest<'a, 'r> for OauthUser {
                 Ok(cookie) => {
                     // FIXME: Auto refresh if time is neigh
 
-                    let http =
-                        create_http_client(format!("Bearer {}", cookie.access_token), config);
-
-                    match http {
-                        Ok(http) => Outcome::Success(OauthUser { http, auth: cookie }),
-                        Err(e) => Outcome::Failure((Status::InternalServerError, e.into())),
-                    }
+                    Outcome::Success(OauthUser {
+                        http: create_http_client(format!("Bearer {}", cookie.access_token), config),
+                        auth: cookie,
+                    })
                 }
                 Err(e) => Outcome::Failure((Status::BadRequest, e.into())),
             }

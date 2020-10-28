@@ -79,7 +79,7 @@ export default function Channel() {
         GET_CHANNEL,
         {
             notifyOnNetworkStatusChange: true,
-            pollInterval: 15000,
+            pollInterval: 60000,
             variables: {
                 channel_id,
                 guild_id,

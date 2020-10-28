@@ -1,10 +1,10 @@
 //! The authentication based routes and handlers
 
-#![allow(clippy::needless_pass_by_value)]
+#![allow(clippy::needless_pass_by_value, clippy::must_use_candidate)]
 
 use crate::{
-    auth::OauthCookie, config::Config, consts::OAUTH_SCOPES, graphql::DiscordContext,
-    templates::HtmlRedirect,
+    auth::OauthCookie, auth::OauthUser, config::Config, consts::OAUTH_SCOPES,
+    graphql::DiscordContext, templates::HtmlRedirect,
 };
 use anyhow::Context;
 use reqwest::{header::HeaderMap, Client as ReqwestClient};
@@ -22,7 +22,7 @@ use twilight_oauth2::{request::access_token_exchange::AccessTokenExchangeRespons
 pub fn oauth_login(
     discord: State<DiscordContext>,
     config: State<Config>,
-    from: Option<String>,
+    from: String,
 ) -> Redirect {
     let authorization_url = discord
         .oauth
@@ -30,9 +30,7 @@ pub fn oauth_login(
         .expect("Redirect url is not one of the allowed")
         .scopes(OAUTH_SCOPES)
         .prompt(Prompt::None)
-        .state(&urlencoding::encode(
-            &from.unwrap_or_else(|| "/".to_string()),
-        ))
+        .state(&urlencoding::encode(&from))
         .build();
 
     Redirect::to(authorization_url)
@@ -42,7 +40,7 @@ pub fn oauth_login(
 #[rocket::get("/oauth/authorize?<code>&<state>")]
 pub async fn oauth_authorize<'r>(
     discord: State<DiscordContext, 'r>,
-    reqwest: State<ReqwestClient, 'r>,
+    reqwest_client: State<ReqwestClient, 'r>,
     config: State<Config, 'r>,
     code: String,
     state: &RawStr,
@@ -56,9 +54,9 @@ pub async fn oauth_authorize<'r>(
     let request = request.scopes(OAUTH_SCOPES).build();
 
     let response =
-        reqwest
+        reqwest_client
             .post(&request.url())
-            .headers(request.headers.into_iter().fold(
+            .headers(request.headers.iter().fold(
                 HeaderMap::new(),
                 |mut map, (header, value)| {
                     map.append(*header, value.parse().unwrap());
@@ -105,12 +103,28 @@ pub async fn oauth_authorize_failure<'r>(
     Html(format!("<h1>{error}</h1><pre>{error_description}</pre><a href=\"{back}\">Go back to <b>{back}<b></a>", error=error, error_description=error_description, back=state.url_decode_lossy()))
 }
 
-// TODO:
-// #[rocket::get("/oauth/logout", data = "<request>")]
-// fn post_graphql_handler(
-//     context: State<DiscordContext>,
-//     schema: State<Schema>,
-//     request: GraphQLRequest,
-// ) -> GraphQLResponse {
-//     request.execute(&schema, &context)
-// }
+/// The oauth route for logging out
+#[rocket::get("/oauth/logout?<from>")]
+pub async fn oauth_logout<'r>(
+    // reqwest_client: State<ReqwestClient, 'r>,
+    _oauth: OauthUser, //TODO: Revoke url
+    from: &RawStr,
+    config: State<Config, 'r>,
+    cookies: &CookieJar<'r>,
+) -> Result<HtmlRedirect, Debug<anyhow::Error>> {
+    // FIXME: Better error page
+
+    cookies.remove_private(Cookie::named(config.auth_cookie_name.clone()));
+
+    Ok(HtmlRedirect {
+        url: dbg!(from.url_decode_lossy()),
+    })
+}
+
+/// The oauth route for logging out if already logged out
+#[rocket::get("/oauth/logout?<from>", rank = 1)]
+pub fn oauth_logout_not_logged_in(from: &RawStr) -> HtmlRedirect {
+    HtmlRedirect {
+        url: dbg!(from.url_decode_lossy()),
+    }
+}

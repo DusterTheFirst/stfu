@@ -1,6 +1,6 @@
 //! The graphql based routes and handlers
 
-#![allow(clippy::needless_pass_by_value)]
+#![allow(clippy::needless_pass_by_value, clippy::must_use_candidate)]
 
 use crate::{
     auth::OauthUser,
