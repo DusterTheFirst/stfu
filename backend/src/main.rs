@@ -100,7 +100,7 @@ pub fn create_reqwest_client(_config: &Config) -> reqwest::Result<ReqwestClient>
 async fn main() -> anyhow::Result<()> {
     dotenv().ok();
 
-    let config: Config = envy::from_env()?;
+    let config: Config = envy::from_env().context("Missing required environment variables")?;
 
     pretty_env_logger::init();
 

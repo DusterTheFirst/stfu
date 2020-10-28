@@ -3,8 +3,9 @@ on:
   push:
     branches:
       - master
+
 jobs:
-  build-and-deploy:
+  backend:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout 🛎️
@@ -14,12 +15,12 @@ jobs:
       - name: rust-toolchain
         uses: actions-rs/toolchain@v1
         with:
+          toolchain: stable
           components: clippy, rustfmt
 
       - name: Install Just
-        run:
-          curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | sudo bash -s
-        
+        run: curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | sudo bash -s
+
       - name: rust-clippy-check
         uses: actions-rs/clippy-check@v1
         with:
@@ -29,17 +30,54 @@ jobs:
         uses: mbrobbel/rustfmt-check@0.3.0
         with:
           args: --manifest-path backend/Cargo.toml
-          token:  ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Backend Schema
+        run: just build-schema
+
+      - name: Upload graphql schema artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: graphql-schema
+          path: backend/target/graphql.json
+  docker-backend:
+    needs: backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 🛎️
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+      - name: Login to GitHub Package Registry
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GHCR_TOKEN }}
+      - run: docker build --pull --rm -f "backend/Dockerfile" -t stfu:latest "backend"
+      - run: docker push stfu:latest
+  frontend:
+    needs: backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 🛎️
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
 
       - name: Yarn Install
         working-directory: frontend
         run: yarn
-      - name: Build Backend Schema
-        run: just build-schema
+
+      - uses: actions/download-artifact@v2
+        with:
+          name: graphql-schema
+          path: backend/target/graphql.json
+      
       - name: Yarn Build
         working-directory: frontend
         run: yarn build
-        
+
       - name: Deploy 🚀
         uses: JamesIves/github-pages-deploy-action@3.6.2
         with:

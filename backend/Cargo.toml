@@ -38,13 +38,13 @@ twilight-model = "0.2.0-beta"
 twilight-standby = "0.2.0-beta"
 
 [patch.crates-io]
-twilight-cache-inmemory = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-current-user-verified-optional" }
-twilight-embed-builder = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-current-user-verified-optional" }
-twilight-gateway = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-current-user-verified-optional" }
-twilight-http = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-current-user-verified-optional" }
-twilight-mention = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-current-user-verified-optional" }
-twilight-model = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-current-user-verified-optional" }
-twilight-standby = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-current-user-verified-optional" }
+twilight-cache-inmemory = { git = "https://github.com/twilight-rs/twilight", branch = "trunk" }
+twilight-embed-builder = { git = "https://github.com/twilight-rs/twilight", branch = "trunk" }
+twilight-gateway = { git = "https://github.com/twilight-rs/twilight", branch = "trunk" }
+twilight-http = { git = "https://github.com/twilight-rs/twilight", branch = "trunk" }
+twilight-mention = { git = "https://github.com/twilight-rs/twilight", branch = "trunk" }
+twilight-model = { git = "https://github.com/twilight-rs/twilight", branch = "trunk" }
+twilight-standby = { git = "https://github.com/twilight-rs/twilight", branch = "trunk" }
 
 # twilight-cache-inmemory = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-client-builder-reqwest-client" }
 # twilight-embed-builder = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-client-builder-reqwest-client" }
