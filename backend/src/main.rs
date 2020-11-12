@@ -142,7 +142,7 @@ async fn main() -> anyhow::Result<()> {
         });
     }
 
-    rocket::custom(Figment::from(rocket::Config::default()).merge(Env::prefixed("ROCKET")))
+    rocket::custom(Figment::from(rocket::Config::default()).merge(Env::prefixed("ROCKET_")))
         .manage(create_reqwest_client(&config))
         .manage(DiscordContext {
             cache,
