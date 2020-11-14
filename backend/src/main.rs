@@ -190,6 +190,7 @@ async fn main() -> anyhow::Result<()> {
 #[async_std::main] // FIXME: maybe move to test or build script
 async fn main() {
     use twilight_http::Client as HttpClient;
+    use twilight_model::id::ApplicationId;
 
     let http = HttpClient::new("");
 
