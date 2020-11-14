@@ -29,7 +29,6 @@ use twilight_cache_inmemory::InMemoryCache;
 use twilight_gateway::shard::ShardBuilder;
 use twilight_http::{client::ClientBuilder as HttpClientBuilder, Client as HttpClient};
 use twilight_model::gateway::Intents;
-use twilight_model_v1::id::ApplicationId;
 use twilight_oauth2::Client as OauthClient;
 
 pub mod auth;
@@ -106,15 +105,11 @@ async fn main() -> anyhow::Result<()> {
 
     let http = create_http_client(&config.token, &config);
 
-    let oauth = {
-        let client_id = ApplicationId(http.current_user_application().await?.id.0);
-
-        Arc::new(OauthClient::new(
-            client_id,
-            &config.client_secret,
-            OAUTH_REDIRECT_URLS,
-        )?)
-    };
+    let oauth = Arc::new(OauthClient::new(
+        http.current_user_application().await?.id,
+        &config.client_secret,
+        OAUTH_REDIRECT_URLS,
+    )?);
 
     let mut shard = ShardBuilder::new(
         &config.token,

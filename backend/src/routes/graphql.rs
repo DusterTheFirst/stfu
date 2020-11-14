@@ -37,7 +37,7 @@ pub async fn get_graphql_handler<'r>(
         .execute(
             &schema,
             &GraphQLContext {
-                discord: discord.clone(),
+                discord: discord.inner().clone(),
                 user: oauth,
             },
         )
@@ -62,7 +62,7 @@ pub async fn post_graphql_handler<'r>(
         .execute(
             &schema,
             &GraphQLContext {
-                discord: discord.clone(),
+                discord: discord.inner().clone(),
                 user: oauth,
             },
         )

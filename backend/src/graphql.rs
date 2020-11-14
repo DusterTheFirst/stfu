@@ -4,29 +4,24 @@ use anyhow::Context as _;
 use futures::future::join_all;
 use juniper::{graphql_object, Context, EmptySubscription, FieldResult, RootNode};
 use std::{
-    collections::HashMap,
     collections::HashSet,
     convert::{TryFrom, TryInto},
     fmt::Debug,
-    mem::transmute,
     ops::Deref,
-    sync::mpsc,
-    sync::Arc,
+    sync::{mpsc, Arc},
 };
 use twilight_cache_inmemory::{model::CachedGuild, model::CachedMember, InMemoryCache};
 use twilight_gateway::Shard;
 use twilight_http::Client as HttpClient;
 use twilight_model::{
-    channel::{self, permission_overwrite::PermissionOverwriteType, GuildChannel},
-    id::{ChannelId, GuildId, UserId},
+    channel::{self, GuildChannel},
+    guild::Permissions,
+    id::{ChannelId, GuildId, RoleId, UserId},
     user,
     voice::VoiceState,
 };
 use twilight_oauth2::Client as OauthClient;
 use twilight_permission_calculator::Calculator;
-
-// FIXME: remove once https://github.com/rarity-rs/permission-calculator upgrades to v 0.2
-use twilight_permission_calculator::prelude as model_v1;
 
 use crate::{auth::OauthUser, consts::REQUIRED_PERMISSIONS};
 
@@ -147,7 +142,7 @@ transparent_wrapper! {
 #[graphql_object(Context = GraphQLContext)]
 /// A member of a guild.
 impl Member {
-    /// Avatar hash of the member. FIXME:
+    /// Avatar hash of the member.
     pub fn avatar(&self) -> Option<&String> {
         self.user.avatar.as_ref()
     }
@@ -311,26 +306,6 @@ impl VoiceChannel {
     /// If the bot can operate on the guild.
     fn can_operate(&self, context: &GraphQLContext) -> FieldResult<bool> {
         let guild_id = self.guild_id.context("Voice channel missing guild_id")?;
-        let guild = context
-            .discord
-            .cache
-            .guild(guild_id)
-            .context("Voice channel guild does not exist")?;
-        let roles = context
-            .discord
-            .cache
-            .guild_roles(guild_id)
-            .context("Unable to get roles for the guild")?
-            .into_iter()
-            .map(|role_id| {
-                context
-                    .discord
-                    .cache
-                    .role(role_id)
-                    .map(|role| (role_id, role.permissions))
-            })
-            .collect::<Option<HashMap<_, _>>>()
-            .context("Failed to get role information from cache")?;
 
         let bot_user = context
             .discord
@@ -344,52 +319,28 @@ impl VoiceChannel {
             .member(guild_id, bot_user.id)
             .context("The bot was unable to get information on itself in the guild")?;
 
-        // FIXME: On release of v2 to stable
+        let member_roles = bot_member
+            .roles
+            .iter()
+            .map(|role_id| {
+                context
+                    .discord
+                    .cache
+                    .role(*role_id)
+                    .map(|role| (*role_id, role.permissions.clone()))
+            })
+            .collect::<Option<Vec<_>>>()
+            .context("The bot was unable to get information on its roles")?;
+
         let permissions = Calculator::new(
-            model_v1::GuildId::from(guild_id.0),
-            model_v1::UserId::from(guild.owner_id.0),
-            &roles
-                .into_iter()
-                .map(|(role_id, permissions)| {
-                    (
-                        model_v1::RoleId::from(role_id.0),
-                        model_v1::Permissions::from_bits_truncate(permissions.bits()),
-                    )
-                })
-                .collect::<HashMap<_, _>>(),
-        )
-        .member(
-            model_v1::UserId::from(bot_user.id.0),
-            bot_member
-                .roles
+            guild_id,
+            bot_user.id,
+            member_roles
                 .iter()
-                .map(|role| model_v1::RoleId::from(role.0))
-                .collect::<Vec<_>>()
+                .collect::<Vec<&(RoleId, Permissions)>>()
                 .as_slice(),
         )
-        .in_channel(
-            unsafe { transmute(self.kind) },
-            self.permission_overwrites
-                .iter()
-                .map(|perm| model_v1::PermissionOverwrite {
-                    allow: model_v1::Permissions::from_bits_truncate(perm.allow.bits()),
-                    deny: model_v1::Permissions::from_bits_truncate(perm.deny.bits()),
-                    kind: match perm.kind {
-                        PermissionOverwriteType::Member(user_id) => {
-                            model_v1::PermissionOverwriteType::Member(model_v1::UserId::from(
-                                user_id.0,
-                            ))
-                        }
-                        PermissionOverwriteType::Role(role_id) => {
-                            model_v1::PermissionOverwriteType::Role(model_v1::RoleId::from(
-                                role_id.0,
-                            ))
-                        }
-                    },
-                })
-                .collect::<Vec<_>>()
-                .as_slice(),
-        )?;
+        .in_channel(self.kind, self.permission_overwrites.as_slice())?;
 
         Ok(permissions.contains(REQUIRED_PERMISSIONS))
     }
