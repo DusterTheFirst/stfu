@@ -18,44 +18,28 @@ juniper = { branch = "master", git = "https://github.com/graphql-rust/juniper", 
 juniper_rocket_async = { branch = "master", git = "https://github.com/graphql-rust/juniper" }
 log = "0.4.11"
 pretty_env_logger = "0.4.0"
-reqwest = { version = "0.10.8", features = ["rustls-tls"] }
+reqwest = { version = "0.10.8", features = ["rustls-tls"], default-features = false }
 rocket = { branch = "master", git = "https://github.com/SergioBenitez/Rocket", features = ["secrets"] }
 serde = { version = "1.0.117", features = ["derive"] }
 serde_json = "1.0.59"
 urlencoding = "1.1.1"
-
-# Twilight mess
-twilight-permission-calculator = { branch = "trunk", git = "https://github.com/twilight-rs/permission-calculator" }
-twilight-oauth2 = { branch = "trunk", git = "https://github.com/twilight-rs/oauth2" }
-# FIXME: move to tagged release once viable
 twilight-cache-inmemory = "0.2.1"
 twilight-embed-builder = "0.2.0"
-twilight-gateway = "0.2.1"
+flate2 = { version = "1.0", default-features = true } # included to force use of rust based libz
+twilight-gateway = { version = "0.2.1", features = ["rustls"], default-features = false }
 twilight-http = "0.2.2"
 twilight-mention = "0.2.0"
 twilight-model = "0.2.1"
 twilight-standby = "0.2.0"
 
-[patch.crates-io]
-twilight-cache-inmemory = { git = "https://github.com/twilight-rs/twilight", branch = "trunk" }
-twilight-embed-builder = { git = "https://github.com/twilight-rs/twilight", branch = "trunk" }
-twilight-gateway = { git = "https://github.com/twilight-rs/twilight", branch = "trunk" }
-twilight-http = { git = "https://github.com/twilight-rs/twilight", branch = "trunk" }
-twilight-mention = { git = "https://github.com/twilight-rs/twilight", branch = "trunk" }
-twilight-model = { git = "https://github.com/twilight-rs/twilight", branch = "trunk" }
-twilight-standby = { git = "https://github.com/twilight-rs/twilight", branch = "trunk" }
+# Twilight Experimental
+twilight-permission-calculator = { branch = "trunk", git = "https://github.com/twilight-rs/permission-calculator" }
+twilight-oauth2 = { branch = "trunk", git = "https://github.com/twilight-rs/oauth2" }
 
-# twilight-cache-inmemory = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-client-builder-reqwest-client" }
-# twilight-embed-builder = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-client-builder-reqwest-client" }
-# twilight-gateway = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-client-builder-reqwest-client" }
-# twilight-http = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-client-builder-reqwest-client" }
-# twilight-mention = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-client-builder-reqwest-client" }
-# twilight-model = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-client-builder-reqwest-client" }
-# twilight-standby = { git = "https://github.com/DusterTheFirst/twilight", branch = "fix-client-builder-reqwest-client" }
 
 [build-dependencies]
-anyhow = "1.0.33"
-regex = "1.4.1"
+anyhow = "1.0.34"
+regex = "1.4.2"
 
 [features]
 generate_schema = []
