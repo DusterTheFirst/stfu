@@ -7,6 +7,7 @@ use std::{
     collections::HashSet,
     convert::{TryFrom, TryInto},
     fmt::Debug,
+    iter,
     ops::Deref,
     sync::{mpsc, Arc},
 };
@@ -323,12 +324,15 @@ impl VoiceChannel {
             .roles
             .iter()
             .map(|role_id| {
-                context
-                    .discord
-                    .cache
-                    .role(*role_id)
-                    .map(|role| (*role_id, role.permissions.clone()))
+                context.discord.cache.role(*role_id).map(|role| {
+                    (*role_id, role.permissions.clone())
+                })
             })
+            .chain(iter::once({
+                let role = context.discord.cache.role(RoleId(guild_id.0)).context("The bot was unable to get information on the @everyone role for the guild the voice channel is in",)?;
+
+                Some((role.id, role.permissions))
+            }))
             .collect::<Option<Vec<_>>>()
             .context("The bot was unable to get information on its roles")?;
 
