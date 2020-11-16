@@ -15,7 +15,7 @@ export function getAvatar(member: ISimpleMember, should_animate = true): string 
     if (member.avatar === null) {
         return `${DISCORD_CDN}embed/avatars/${parseInt(member.discriminator, 10) % 5}.png`;
     } else {
-        return `${DISCORD_CDN}avatars/${member.id}/${member.avatar}.${member.avatar?.startsWith("a_") && should_animate ? "gif" : "webp"}`;
+        return `${DISCORD_CDN}avatars/${member.id}/${member.avatar}.${member.avatar?.startsWith("a_") && should_animate ? "gif" : "png"}`;
     }
 }
 
@@ -32,6 +32,6 @@ export function getGuildIcon(guild: ISimpleGuild, should_animate = true): string
     if (guild.icon === null) {
         return undefined;
     } else {
-        return `${DISCORD_CDN}icons/${guild.id}/${guild.icon}.${guild.icon.startsWith("a_") && should_animate ? "gif" : "webp"}`;
+        return `${DISCORD_CDN}icons/${guild.id}/${guild.icon}.${guild.icon.startsWith("a_") && should_animate ? "gif" : "png"}`;
     }
 }
