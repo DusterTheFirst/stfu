@@ -197,8 +197,8 @@ function GuildInfo({ guild, refetch }: IGuildInfoProps) {
                                                             <tr key={j}>
                                                                 <td><Link to={`/${guild.id}/${vc.id}`}>{vc.name}</Link></td>
                                                                 <td>{vc.position}</td>
-                                                                <td>{vc.botMissingPermissions}</td>
-                                                                <td>{vc.userMissingPermissions}</td>
+                                                                <td>{vc.botMissingPermissions?.join(", ")}</td>
+                                                                <td>{vc.userMissingPermissions?.join(", ")}</td>
                                                                 <td>{vc.userLimit}</td>
                                                                 <td>{vc.states.length}</td>
                                                                 <td>{vc.states.map(s => `${s.member.name}#${s.member.discriminator}`).join(", ")}</td>

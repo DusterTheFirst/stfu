@@ -170,8 +170,8 @@ function ChannelInfo({ guild, channel, refetch, muteAll, unmuteAll }: IChannelIn
             <button onClick={refetch}>Refresh</button>
 
             <div>
-                {channel.botMissingPermissions === null ? undefined : <div>The bot is unable to perform actions on this channel. You are missing the following permissions on the channel: {channel.botMissingPermissions}</div>}
-                {channel.userMissingPermissions === null ? undefined : <div>You are unable to perform actions on this channel. You are missing the following permissions on this channel: {channel.userMissingPermissions}</div>}
+                {channel.botMissingPermissions === null ? undefined : <div>The bot is unable to perform actions on this channel. You are missing the following permissions on the channel: {channel.botMissingPermissions?.join(", ")}</div>}
+                {channel.userMissingPermissions === null ? undefined : <div>You are unable to perform actions on this channel. You are missing the following permissions on this channel: {channel.userMissingPermissions?.join(", ")}</div>}
                 <button onClick={muteAll.bind(muteAll)} disabled={!operable}>Mute</button>
                 <button onClick={unmuteAll.bind(unmuteAll)} disabled={!operable}>Unmute</button>
             </div>
@@ -191,8 +191,8 @@ function ChannelInfo({ guild, channel, refetch, muteAll, unmuteAll }: IChannelIn
                     <tr>
                         <td>{channel.name}</td>
                         <td>{channel.position}</td>
-                        <td>{channel.botMissingPermissions}</td>
-                        <td>{channel.userMissingPermissions}</td>
+                        <td>{channel.botMissingPermissions?.join(", ")}</td>
+                        <td>{channel.userMissingPermissions?.join(", ")}</td>
                         <td>{channel.userLimit}</td>
                         <td>{channel.states.length}</td>
                         <td>
