@@ -337,7 +337,10 @@ impl VoiceChannel {
     }
 
     /// The permissions that the bot is missing in this channel. Returns `None` if the bot has enough permissions
-    fn bot_missing_permissions(&self, context: &GraphQLContext) -> FieldResult<Option<Vec<String>>> {
+    fn bot_missing_permissions(
+        &self,
+        context: &GraphQLContext,
+    ) -> FieldResult<Option<Vec<String>>> {
         missing_permissions(
             context,
             self,
