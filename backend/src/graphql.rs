@@ -2,7 +2,10 @@
 
 use anyhow::Context as _;
 use futures::future::join_all;
-use juniper::{graphql_object, Context, EmptySubscription, FieldResult, RootNode};
+use juniper::{
+    graphql_object, graphql_value, Context, EmptySubscription, FieldError, FieldResult, RootNode,
+    Value,
+};
 use std::{
     collections::HashSet,
     convert::{TryFrom, TryInto},
@@ -82,9 +85,20 @@ macro_rules! transparent_wrapper {
         $(
             $(#[$outer:meta])*
             pub struct $wrapper:ident($wrapped:ty);
-            use enum type $enum_name:ident::$variant:ident($var_wrapped:ty);
+            use enum type $enum_name:ident::$variant:ident($var_wrapped:ty) else $err:literal;
         )*
     ) => {
+        /// An error that will be thrown in the `TryFrom` implementations of the wrapper types if
+        /// the wrong enum variant was passed
+        #[derive(Debug, Clone, Copy)]
+        pub struct WrongVariantError(&'static str);
+        impl std::fmt::Display for WrongVariantError {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str(self.0)
+            }
+        }
+        impl std::error::Error for WrongVariantError {}
+
         $(
             #[derive(Clone, Debug)]
             $(#[$outer])*
@@ -102,13 +116,13 @@ macro_rules! transparent_wrapper {
                 }
             }
             impl TryFrom<$wrapped> for $wrapper {
-                type Error = ();
+                type Error = WrongVariantError;
 
                 fn try_from(w: $wrapped) -> Result<Self, Self::Error> {
                     if let $enum_name::$variant(_) = w.as_ref() {
                         Ok(Self(w))
                     } else {
-                        Err(())
+                        Err(WrongVariantError($err))
                     }
                 }
             }
@@ -132,10 +146,10 @@ transparent_wrapper! {
 transparent_wrapper! {
     /// A discord channel category.
     pub struct CategoryChannel(Arc<GuildChannel>);
-    use enum type GuildChannel::Category(channel::CategoryChannel);
+    use enum type GuildChannel::Category(channel::CategoryChannel) else "Channel is not a category";
     /// A discord voice channel.
     pub struct VoiceChannel(Arc<GuildChannel>);
-    use enum type GuildChannel::Voice(channel::VoiceChannel);
+    use enum type GuildChannel::Voice(channel::VoiceChannel) else "Channel is not a voice channel";
 }
 
 // Create juniper objects
@@ -304,49 +318,36 @@ impl VoiceChannel {
         })
     }
 
-    /// If the bot can operate on the guild.
-    fn can_operate(&self, context: &GraphQLContext) -> FieldResult<bool> {
-        let guild_id = self.guild_id.context("Voice channel missing guild_id")?;
-
-        let bot_user = context
-            .discord
-            .cache
-            .current_user()
-            .context("The bot was unable to get information on its user")?;
-
-        let bot_member = context
-            .discord
-            .cache
-            .member(guild_id, bot_user.id)
-            .context("The bot was unable to get information on itself in the guild")?;
-
-        let member_roles = bot_member
-            .roles
-            .iter()
-            .map(|role_id| {
-                context.discord.cache.role(*role_id).map(|role| {
-                    (*role_id, role.permissions.clone())
-                })
-            })
-            .chain(iter::once({
-                let role = context.discord.cache.role(RoleId(guild_id.0)).context("The bot was unable to get information on the @everyone role for the guild the voice channel is in",)?;
-
-                Some((role.id, role.permissions))
-            }))
-            .collect::<Option<Vec<_>>>()
-            .context("The bot was unable to get information on its roles")?;
-
-        let permissions = Calculator::new(
-            guild_id,
-            bot_user.id,
-            member_roles
-                .iter()
-                .collect::<Vec<&(RoleId, Permissions)>>()
-                .as_slice(),
+    /// The permissions that the user is missing in this channel. Returns `None` if the user has enough permissions
+    async fn user_missing_permissions(
+        &self,
+        context: &GraphQLContext,
+    ) -> FieldResult<Option<Vec<String>>> {
+        missing_permissions(
+            context,
+            self,
+            context
+                .user
+                .http
+                .current_user()
+                .await
+                .context("Unable to get information on the current user")?
+                .id,
         )
-        .in_channel(self.kind, self.permission_overwrites.as_slice())?;
+    }
 
-        Ok(permissions.contains(REQUIRED_PERMISSIONS))
+    /// The permissions that the bot is missing in this channel. Returns `None` if the bot has enough permissions
+    fn bot_missing_permissions(&self, context: &GraphQLContext) -> FieldResult<Option<Vec<String>>> {
+        missing_permissions(
+            context,
+            self,
+            context
+                .discord
+                .cache
+                .current_user()
+                .context("Unable to get information on the bot current")?
+                .id,
+        )
     }
 
     /// Voice channel states in this voice channel.
@@ -359,6 +360,59 @@ impl VoiceChannel {
             .into_iter()
             .map(|state| state.into())
             .collect()
+    }
+}
+
+fn missing_permissions(
+    context: &GraphQLContext,
+    channel: &VoiceChannel,
+    user_id: UserId,
+) -> FieldResult<Option<Vec<String>>> {
+    let guild_id = channel.guild_id.context("Voice channel missing guild_id")?;
+
+    let member = context
+        .discord
+        .cache
+        .member(guild_id, user_id)
+        .context("Unable to get information about the user in the guild")?;
+
+    let member_roles = member
+            .roles
+            .iter()
+            .map(|role_id| {
+                context.discord.cache.role(*role_id).map(|role| {
+                    (*role_id, role.permissions.clone())
+                })
+            })
+            .chain(iter::once({
+                let role = context.discord.cache.role(RoleId(guild_id.0)).context("The bot was unable to get information on the @everyone role for the guild the voice channel is in")?;
+
+                Some((role.id, role.permissions))
+            }))
+            .collect::<Option<Vec<_>>>()
+            .context("The bot was unable to get information on its roles")?;
+
+    let permissions = Calculator::new(
+        guild_id,
+        user_id,
+        member_roles
+            .iter()
+            .collect::<Vec<&(RoleId, Permissions)>>()
+            .as_slice(),
+    )
+    .in_channel(channel.kind, channel.permission_overwrites.as_slice())?;
+
+    let missing_perms = REQUIRED_PERMISSIONS - permissions;
+
+    if missing_perms.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(
+            format!("{:?}", missing_perms)
+                .split("|")
+                .map(|x| x.trim().to_string())
+                .collect(),
+        ))
     }
 }
 
@@ -591,9 +645,39 @@ impl MutationRoot {
         let guild_id = GuildId(guild_id.parse().context("Invalid guild id")?);
         let channel_id = ChannelId(channel_id.parse().context("Invalid channel id")?);
 
-        mass_update_voice_state(context, channel_id, guild_id, true)
-            .await
-            .map(|ids| ids.into_iter().map(|id| id.to_string()).collect())
+        if let Some(missing_perms) = missing_permissions(
+            context,
+            &VoiceChannel::try_from(
+                context
+                    .discord
+                    .cache
+                    .guild_channel(channel_id)
+                    .context("Channel does not exist on the guild")?,
+            )?,
+            context
+                .user
+                .http
+                .current_user()
+                .await
+                .context("Unable to get information on the current oauth user")?
+                .id,
+        )? {
+            let missing_perms = Value::List(
+                missing_perms
+                    .into_iter()
+                    .map(|x| Value::from(x))
+                    .collect::<Vec<_>>(),
+            );
+
+            Err(FieldError::new(
+                "Permission denied: user does not have enough permissions to perform that action",
+                graphql_value!({ "missing_permissions": missing_perms }),
+            ))
+        } else {
+            mass_update_voice_state(context, channel_id, guild_id, true)
+                .await
+                .map(|ids| ids.into_iter().map(|id| id.to_string()).collect())
+        }
     }
 
     /// Unmute all users in a voice channel.
@@ -612,9 +696,39 @@ impl MutationRoot {
         let guild_id = GuildId(guild_id.parse().context("Invalid guild id")?);
         let channel_id = ChannelId(channel_id.parse().context("Invalid channel id")?);
 
-        mass_update_voice_state(context, channel_id, guild_id, false)
-            .await
-            .map(|ids| ids.into_iter().map(|id| id.to_string()).collect())
+        if let Some(missing_perms) = missing_permissions(
+            context,
+            &VoiceChannel::try_from(
+                context
+                    .discord
+                    .cache
+                    .guild_channel(channel_id)
+                    .context("Channel does not exist on the guild")?,
+            )?,
+            context
+                .user
+                .http
+                .current_user()
+                .await
+                .context("Unable to get information on the current oauth user")?
+                .id,
+        )? {
+            let missing_perms = Value::List(
+                missing_perms
+                    .into_iter()
+                    .map(|x| Value::from(x))
+                    .collect::<Vec<_>>(),
+            );
+
+            Err(FieldError::new(
+                "Permission denied: user does not have enough permissions to perform that action",
+                graphql_value!({ "missing_permissions": missing_perms }),
+            ))
+        } else {
+            mass_update_voice_state(context, channel_id, guild_id, false)
+                .await
+                .map(|ids| ids.into_iter().map(|id| id.to_string()).collect())
+        }
     }
 }
 

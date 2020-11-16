@@ -16,7 +16,8 @@ const GET_CHANNEL = gql`
             name
             id
             voiceChannel(id: $channel_id) {
-                canOperate
+                botMissingPermissions
+                userMissingPermissions
                 category {
                     id
                     name
@@ -162,21 +163,25 @@ interface IChannelInfoProps {
 
 /** The information on a specific channel */
 function ChannelInfo({ guild, channel, refetch, muteAll, unmuteAll }: IChannelInfoProps) {
+    let operable = channel.botMissingPermissions === null && channel.userMissingPermissions === null;
     return (
         <div>
             <div>/ <Link to="/">Home</Link> / <Link to={`/${guild.id}`}>{guild.name}</Link> / {channel.name} </div>
             <button onClick={refetch}>Refresh</button>
 
             <div>
-                <button onClick={muteAll.bind(muteAll)}>Mute</button>
-                <button onClick={unmuteAll.bind(unmuteAll)}>Unmute</button>
+                {channel.botMissingPermissions === null ? undefined : <div>The bot is unable to perform actions on this channel. You are missing the following permissions on the channel: {channel.botMissingPermissions}</div>}
+                {channel.userMissingPermissions === null ? undefined : <div>You are unable to perform actions on this channel. You are missing the following permissions on this channel: {channel.userMissingPermissions}</div>}
+                <button onClick={muteAll.bind(muteAll)} disabled={!operable}>Mute</button>
+                <button onClick={unmuteAll.bind(unmuteAll)} disabled={!operable}>Unmute</button>
             </div>
             <table>
                 <thead>
                     <tr>
                         <th>Name</th>
                         <th>Position</th>
-                        <th>Can operate</th>
+                        <th>Bot Missing Permissions</th>
+                        <th>User Missing Permissions</th>
                         <th>User Limit</th>
                         <th>User Count</th>
                         <th>Users</th>
@@ -186,7 +191,8 @@ function ChannelInfo({ guild, channel, refetch, muteAll, unmuteAll }: IChannelIn
                     <tr>
                         <td>{channel.name}</td>
                         <td>{channel.position}</td>
-                        <td>{channel.canOperate.toString()}</td>
+                        <td>{channel.botMissingPermissions}</td>
+                        <td>{channel.userMissingPermissions}</td>
                         <td>{channel.userLimit}</td>
                         <td>{channel.states.length}</td>
                         <td>

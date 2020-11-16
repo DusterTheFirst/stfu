@@ -21,7 +21,8 @@ const GET_SHARED_GUILDS = gql`
                 color
             }
             voiceChannels {
-                canOperate
+                userMissingPermissions
+                botMissingPermissions
             }
             me {
                 id
@@ -86,7 +87,8 @@ function GuildsInfo({ guilds, refetch }: IGuildsInfoProps) {
                         <th>Guild Id</th>
                         <th>Guild Owner</th>
                         <th>You</th>
-                        <th>Operable</th>
+                        <th>Bot Operable</th>
+                        <th>User Operable</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -97,7 +99,8 @@ function GuildsInfo({ guilds, refetch }: IGuildsInfoProps) {
                             <td>{guild.id}</td>
                             <td style={{ color: `#${guild.owner.color === null ? "000000" : guild.owner.color.toString(16)}`, fontWeight: "bold" }}>{guild.owner.nick === null ? guild.owner.name : guild.owner.nick}#{guild.owner.discriminator}</td>
                             <td style={{ color: `#${guild.me.color === null ? "000000" : guild.me.color.toString(16)}`, fontWeight: "bold" }}>{guild.me.nick === null ? guild.me.name : guild.me.nick}#{guild.me.discriminator}</td>
-                            <td>{guild.voiceChannels.some(x => x.canOperate).toString()}</td>
+                            <td>{guild.voiceChannels.some(x => x.botMissingPermissions === null).toString()}</td>
+                            <td>{guild.voiceChannels.some(x => x.userMissingPermissions === null).toString()}</td>
                         </tr>
                     ))}
                 </tbody>

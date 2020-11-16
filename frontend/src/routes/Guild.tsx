@@ -26,7 +26,8 @@ const GET_GUILD = gql`
             }
             unavailable
             voiceChannels {
-                canOperate
+                botMissingPermissions
+                userMissingPermissions
                 category {
                     id
                     name
@@ -184,7 +185,8 @@ function GuildInfo({ guild, refetch }: IGuildInfoProps) {
                                                         <tr>
                                                             <th>Name</th>
                                                             <th>Position</th>
-                                                            <th>Can operate</th>
+                                                            <th>Bot Missing Permissions</th>
+                                                            <th>User Missing Permissions</th>
                                                             <th>User Limit</th>
                                                             <th>User Count</th>
                                                             <th>Users</th>
@@ -195,7 +197,8 @@ function GuildInfo({ guild, refetch }: IGuildInfoProps) {
                                                             <tr key={j}>
                                                                 <td><Link to={`/${guild.id}/${vc.id}`}>{vc.name}</Link></td>
                                                                 <td>{vc.position}</td>
-                                                                <td>{vc.canOperate.toString()}</td>
+                                                                <td>{vc.botMissingPermissions}</td>
+                                                                <td>{vc.userMissingPermissions}</td>
                                                                 <td>{vc.userLimit}</td>
                                                                 <td>{vc.states.length}</td>
                                                                 <td>{vc.states.map(s => `${s.member.name}#${s.member.discriminator}`).join(", ")}</td>
