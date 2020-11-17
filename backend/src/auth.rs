@@ -37,6 +37,9 @@ pub struct OauthCookie {
 
 impl OauthCookie {
     /// Create an instance of the cookie from the response and make a request to get the user id
+    ///
+    /// # Errors
+    /// If the request to get the user's id fails
     pub async fn create(
         AccessTokenExchangeResponse {
             access_token,

@@ -374,7 +374,7 @@ fn missing_permissions(
             .iter()
             .map(|role_id| {
                 context.discord.cache.role(*role_id).map(|role| {
-                    (*role_id, role.permissions.clone())
+                    (*role_id, role.permissions)
                 })
             })
             .chain(iter::once({
@@ -402,7 +402,7 @@ fn missing_permissions(
     } else {
         Ok(Some(
             format!("{:?}", missing_perms)
-                .split("|")
+                .split('|')
                 .map(|x| x.trim().to_string())
                 .collect(),
         ))
@@ -652,7 +652,7 @@ impl MutationRoot {
             let missing_perms = Value::List(
                 missing_perms
                     .into_iter()
-                    .map(|x| Value::from(x))
+                    .map(Value::from)
                     .collect::<Vec<_>>(),
             );
 
@@ -697,7 +697,7 @@ impl MutationRoot {
             let missing_perms = Value::List(
                 missing_perms
                     .into_iter()
-                    .map(|x| Value::from(x))
+                    .map(Value::from)
                     .collect::<Vec<_>>(),
             );
 
