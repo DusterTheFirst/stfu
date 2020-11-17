@@ -184,16 +184,15 @@ impl Member {
 
     /// Member's color, calculated from their highest, colored, role.
     fn color(&self, context: &GraphQLContext) -> FieldResult<Option<i32>> {
-        let mut roles = self
+        Ok(self
             .roles
             .iter()
             .cloned()
             .filter_map(|role_id| context.discord.cache.role(role_id))
-            .collect::<Vec<_>>();
-
-        roles.sort_by_key(|role| role.position);
-
-        Ok(roles.last().map(|role| role.color.try_into()).transpose()?)
+            .filter(|x| x.color == 0)
+            .max_by_key(|x| x.position)
+            .map(|role| role.color.try_into())
+            .transpose()?)
     }
 
     /// Member's discriminator.
@@ -459,7 +458,7 @@ impl Guild {
                             .guild_channel(id)
                             .and_then(|c| c.try_into().ok())
                     })
-                    .collect::<Vec<_>>()
+                    .collect()
             })
             .unwrap_or_default()
     }
@@ -649,12 +648,7 @@ impl MutationRoot {
             )?,
             context.user.cookie.user_id,
         )? {
-            let missing_perms = Value::List(
-                missing_perms
-                    .into_iter()
-                    .map(Value::from)
-                    .collect::<Vec<_>>(),
-            );
+            let missing_perms = Value::List(missing_perms.into_iter().map(Value::from).collect());
 
             Err(FieldError::new(
                 "Permission denied: user does not have enough permissions to perform that action",
