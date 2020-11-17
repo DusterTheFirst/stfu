@@ -80,8 +80,12 @@ pub async fn oauth_authorize<'r>(
     cookies.add_private(
         Cookie::build(
             config.auth_cookie_name.clone(),
-            serde_json::to_string(&OauthCookie::from(response))
-                .context("Oauth cookie was unable to be serialized")?,
+            serde_json::to_string(
+                &OauthCookie::create(response, &config)
+                    .await
+                    .context("Unable to fetch information on the current user")?,
+            )
+            .context("Oauth cookie was unable to be serialized")?,
         )
         .domain(config.auth_cookie_domain.clone())
         .same_site(SameSite::Lax)

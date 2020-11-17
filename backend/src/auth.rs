@@ -2,13 +2,15 @@
 
 use crate::{config::Config, create_http_client};
 use anyhow::anyhow;
+use log::warn;
 use rocket::{
-    http::Status,
+    http::{Cookie, Status},
     request::{FromRequest, Outcome},
 };
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 use twilight_http::Client as HttpClient;
+use twilight_model::id::UserId;
 use twilight_oauth2::request::access_token_exchange::AccessTokenExchangeResponse;
 
 /// The cookie containing oauth authentication information for a user
@@ -29,18 +31,26 @@ pub struct OauthCookie {
     pub refresh_token: String,
     /// The seconds since the unix epoch that this oauth token was created
     pub created_at: u64,
+    /// The user's id
+    pub user_id: UserId,
 }
 
-impl From<AccessTokenExchangeResponse> for OauthCookie {
-    fn from(
+impl OauthCookie {
+    /// Create an instance of the cookie from the response and make a request to get the user id
+    pub async fn create(
         AccessTokenExchangeResponse {
             access_token,
             expires_in,
             refresh_token,
             ..
         }: AccessTokenExchangeResponse,
-    ) -> Self {
-        OauthCookie {
+        config: &Config,
+    ) -> Result<Self, twilight_http::Error> {
+        Ok(OauthCookie {
+            user_id: create_http_client(format!("Bearer {}", access_token), config)
+                .current_user()
+                .await?
+                .id,
             access_token,
             expires_in,
             refresh_token,
@@ -48,7 +58,7 @@ impl From<AccessTokenExchangeResponse> for OauthCookie {
                 .duration_since(UNIX_EPOCH)
                 .expect("Time went backwards")
                 .as_secs(),
-        }
+        })
     }
 }
 
@@ -57,8 +67,8 @@ impl From<AccessTokenExchangeResponse> for OauthCookie {
 pub struct OauthUser {
     /// The http client to request information from discord
     pub http: HttpClient,
-    /// The authentication information for the user
-    pub auth: OauthCookie,
+    /// The authentication information stored in the cookie for the user
+    pub cookie: OauthCookie,
 }
 
 #[rocket::async_trait]
@@ -85,10 +95,19 @@ impl<'a, 'r> FromRequest<'a, 'r> for OauthUser {
 
                     Outcome::Success(OauthUser {
                         http: create_http_client(format!("Bearer {}", cookie.access_token), config),
-                        auth: cookie,
+                        cookie,
                     })
                 }
-                Err(e) => Outcome::Failure((Status::BadRequest, e.into())),
+                Err(e) => {
+                    warn!("Received malformed cookie. Clearing it. {}", e);
+
+                    // Remove cookie if malformed
+                    request
+                        .cookies()
+                        .remove_private(Cookie::named(config.auth_cookie_name.clone()));
+
+                    Outcome::Forward(())
+                }
             }
         } else {
             Outcome::Forward(())

@@ -190,7 +190,7 @@ async fn main() -> anyhow::Result<()> {
 #[async_std::main] // FIXME: maybe move to test or build script
 async fn main() {
     use twilight_http::Client as HttpClient;
-    use twilight_model::id::ApplicationId;
+    use twilight_model::id::{ApplicationId, UserId};
 
     let http = HttpClient::new("");
 
@@ -213,11 +213,12 @@ async fn main() {
             },
             user: auth::OauthUser {
                 http: HttpClient::new(""),
-                auth: auth::OauthCookie {
+                cookie: auth::OauthCookie {
                     access_token: "".into(),
                     expires_in: 0,
                     refresh_token: "".into(),
                     created_at: 0,
+                    user_id: UserId(0),
                 },
             },
         },

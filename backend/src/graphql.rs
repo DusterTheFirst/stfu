@@ -323,17 +323,7 @@ impl VoiceChannel {
         &self,
         context: &GraphQLContext,
     ) -> FieldResult<Option<Vec<String>>> {
-        missing_permissions(
-            context,
-            self,
-            context
-                .user
-                .http
-                .current_user()
-                .await
-                .context("Unable to get information on the current user")?
-                .id,
-        )
+        missing_permissions(context, self, context.user.cookie.user_id)
     }
 
     /// The permissions that the bot is missing in this channel. Returns `None` if the bot has enough permissions
@@ -522,7 +512,7 @@ impl Guild {
         Ok(context
             .discord
             .cache
-            .member(self.id, context.user.http.current_user().await?.id)
+            .member(self.id, context.user.cookie.user_id)
             .map(|member| member.into())
             .context("Failed to lookup current user in cache")?)
     }
@@ -657,13 +647,7 @@ impl MutationRoot {
                     .guild_channel(channel_id)
                     .context("Channel does not exist on the guild")?,
             )?,
-            context
-                .user
-                .http
-                .current_user()
-                .await
-                .context("Unable to get information on the current oauth user")?
-                .id,
+            context.user.cookie.user_id,
         )? {
             let missing_perms = Value::List(
                 missing_perms
@@ -708,13 +692,7 @@ impl MutationRoot {
                     .guild_channel(channel_id)
                     .context("Channel does not exist on the guild")?,
             )?,
-            context
-                .user
-                .http
-                .current_user()
-                .await
-                .context("Unable to get information on the current oauth user")?
-                .id,
+            context.user.cookie.user_id,
         )? {
             let missing_perms = Value::List(
                 missing_perms
