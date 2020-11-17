@@ -8,7 +8,7 @@ COPY . .
 RUN cargo build --release
 
 # The app container
-FROM gcr.io/distroless/cc
+FROM debian:buster-slim
 LABEL Author="Zachary Kohnen"
 WORKDIR /app
 

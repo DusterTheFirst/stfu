@@ -656,6 +656,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "crc32fast",
  "libc",
+ "libz-sys",
  "miniz_oxide",
 ]
 
@@ -1161,6 +1162,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4d58d1b70b004888f764dfbf6a26a3b0342a1632d33968e4a179d8011c760614"
 
 [[package]]
+name = "libz-sys"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "602113192b08db8f38796c4e85c39e960c145965140e918018bcde1952429655"
+dependencies = [
+ "cc",
+ "pkg-config",
+ "vcpkg",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1441,6 +1453,12 @@ name = "pin-utils"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
+
+[[package]]
+name = "pkg-config"
+version = "0.3.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3831453b3449ceb48b6d9c7ad7c96d5ea673e9b470a1dc578c2ce6521230884c"
 
 [[package]]
 name = "polling"
@@ -2053,7 +2071,6 @@ dependencies = [
  "async-std",
  "dotenv",
  "envy",
- "flate2",
  "futures",
  "juniper",
  "juniper_rocket_async",
@@ -2066,14 +2083,11 @@ dependencies = [
  "serde",
  "serde_json",
  "twilight-cache-inmemory",
- "twilight-embed-builder",
  "twilight-gateway",
  "twilight-http",
- "twilight-mention",
  "twilight-model",
  "twilight-oauth2",
  "twilight-permission-calculator",
- "twilight-standby",
  "urlencoding",
 ]
 
@@ -2322,15 +2336,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "twilight-embed-builder"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4af4505f1442f60f129ba678a222aa8e0f4ec3ec0f1b60e806682d6d067c32c2"
-dependencies = [
- "twilight-model",
-]
-
-[[package]]
 name = "twilight-gateway"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2387,15 +2392,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "twilight-mention"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db84e44e0303e17c6924569849116d2c92e2c77567f04133fe5e2bcd6a04f7de"
-dependencies = [
- "twilight-model",
-]
-
-[[package]]
 name = "twilight-model"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2425,19 +2421,6 @@ name = "twilight-permission-calculator"
 version = "0.1.0"
 source = "git+https://github.com/twilight-rs/permission-calculator?branch=trunk#7252faeb0e44ea9ea244e586b922936c5fe585ee"
 dependencies = [
- "tracing",
- "twilight-model",
-]
-
-[[package]]
-name = "twilight-standby"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a74e520f90fab40f542c7b83a11895ffd7881fa170015c44d4a52d8af8a29d5"
-dependencies = [
- "dashmap",
- "futures-channel",
- "futures-util",
  "tracing",
  "twilight-model",
 ]
@@ -2548,6 +2531,12 @@ name = "utf-8"
 version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05e42f7c18b8f902290b009cde6d651262f956c98bc51bca4cd1d511c9cd85c7"
+
+[[package]]
+name = "vcpkg"
+version = "0.2.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6454029bf181f092ad1b853286f23e2c507d8e8194d01d92da4a55c274a5508c"
 
 [[package]]
 name = "vec-arena"
