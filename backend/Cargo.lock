@@ -416,6 +416,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmake"
+version = "0.1.45"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb6210b637171dfba4cda12e579ac6dc73f5165ad56133e5d72ef3131f320855"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "concurrent-queue"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1168,6 +1177,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "602113192b08db8f38796c4e85c39e960c145965140e918018bcde1952429655"
 dependencies = [
  "cc",
+ "cmake",
+ "libc",
  "pkg-config",
  "vcpkg",
 ]
