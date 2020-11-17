@@ -85,8 +85,9 @@ impl<'a, 'r> FromRequest<'a, 'r> for OauthUser {
                 ))
             }
         };
+        let cookies = request.cookies();
 
-        let cookie = request.cookies().get_private(&config.auth_cookie_name);
+        let cookie = cookies.get_private(&config.auth_cookie_name);
 
         if let Some(cookie) = cookie {
             match serde_json::from_str::<OauthCookie>(cookie.value()) {
@@ -102,9 +103,10 @@ impl<'a, 'r> FromRequest<'a, 'r> for OauthUser {
                     warn!("Received malformed cookie. Clearing it. {}", e);
 
                     // Remove cookie if malformed
-                    request
-                        .cookies()
-                        .remove_private(Cookie::named(config.auth_cookie_name.clone()));
+                    let mut cookie = Cookie::named(config.auth_cookie_name.clone());
+                    cookie.set_domain(config.auth_cookie_domain.clone());
+
+                    cookies.remove_private(cookie);
 
                     Outcome::Forward(())
                 }

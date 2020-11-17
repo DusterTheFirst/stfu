@@ -119,7 +119,10 @@ pub async fn oauth_logout<'r>(
 ) -> Result<HtmlRedirect, Debug<anyhow::Error>> {
     // FIXME: Better error page
 
-    cookies.remove_private(Cookie::named(config.auth_cookie_name.clone()));
+    let mut cookie = Cookie::named(config.auth_cookie_name.clone());
+    cookie.set_domain(config.auth_cookie_domain.clone());
+
+    cookies.remove_private(cookie);
 
     Ok(HtmlRedirect {
         url: dbg!(from.url_decode_lossy()),
