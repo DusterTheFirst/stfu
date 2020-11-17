@@ -189,7 +189,7 @@ impl Member {
             .iter()
             .cloned()
             .filter_map(|role_id| context.discord.cache.role(role_id))
-            .filter(|x| x.color == 0)
+            .filter(|x| x.color != 0)
             .max_by_key(|x| x.position)
             .map(|role| role.color.try_into())
             .transpose()?)
