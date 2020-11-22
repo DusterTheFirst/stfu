@@ -716,6 +716,18 @@ async fn mass_update_voice_state(
     if let Some(states) = context.discord.cache.voice_channel_states(channel_id) {
         let (send_muted, receive_muted) = mpsc::channel();
 
+        // Remove bots
+        let states = states
+            .into_iter()
+            .filter_map(|state| {
+                if context.discord.cache.user(state.user_id)?.bot {
+                    None
+                } else {
+                    Some(Ok(state))
+                }
+            })
+            .collect::<FieldResult<Vec<_>>>()?;
+
         for chunk in states.chunks(10) {
             let send_muted = send_muted.clone();
 
